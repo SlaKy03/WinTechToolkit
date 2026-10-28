@@ -1,0 +1,10 @@
+# build output
+dist/
+
+# local files, not part of the project
+.claude/
+.vscode/
+*.md.bak
+*Claude Agent*.md
+Riprendere sviluppo*.md
+da rivedere.md

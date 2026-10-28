@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement or a new tool
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like the toolkit to do?
+  - type: textarea
+    id: manual
+    attributes:
+      label: How do you do it today?
+      description: Commands, tools or steps you use now.

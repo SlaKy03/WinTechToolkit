@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Checks
         shell: powershell
@@ -27,7 +27,7 @@ jobs:
 
       # The release must NOT be marked as pre-release: /releases/latest (used by the
       # launcher and start.ps1) ignores pre-releases.
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/WinTechToolkit.zip

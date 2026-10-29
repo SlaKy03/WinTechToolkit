@@ -126,7 +126,7 @@ $pageXaml = @"
       <DataGridTextColumn Header="Category" Binding="{Binding Category, Mode=OneWay}" Width="175"/>
       <DataGridTextColumn Header="Source" Binding="{Binding Source, Mode=OneWay}" Width="230"/>
       <DataGridTextColumn Header="ID" Binding="{Binding Id, Mode=OneWay}" Width="58"/>
-      <DataGridTextColumn Header="Description" Binding="{Binding Summary, Mode=OneWay}" Width="*"/>
+      <DataGridTextColumn Header="Description" Binding="{Binding Summary, Mode=OneWay}" Width="*" MinWidth="260"/>
     </DataGrid.Columns>
   </DataGrid>
   <GridSplitter Grid.Row="4" Cursor="SizeNS"/>

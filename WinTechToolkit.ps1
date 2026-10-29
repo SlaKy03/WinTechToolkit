@@ -615,6 +615,33 @@ function Initialize-WTTileRows {
     }
 }
 
+function Initialize-WTGridColumns {
+    # Text columns: long values end with "..." and show the whole text in a tooltip
+    # (only when cut, see WTTrimToolTip) instead of being clipped
+    [WTTrimToolTip]::Register()
+    $style = New-Object System.Windows.Style ([System.Windows.Controls.TextBlock]), ([System.Windows.Controls.DataGridTextColumn]::DefaultElementStyle)
+    $style.Setters.Add((New-Object System.Windows.Setter ([System.Windows.Controls.TextBlock]::TextTrimmingProperty), ([System.Windows.TextTrimming]::CharacterEllipsis)))
+    $style.Setters.Add((New-Object System.Windows.Setter ([System.Windows.FrameworkElement]::TagProperty), 'TrimTip'))
+    $tip = New-Object System.Windows.Data.Binding 'Text'
+    $tip.RelativeSource = New-Object System.Windows.Data.RelativeSource ([System.Windows.Data.RelativeSourceMode]::Self)
+    $style.Setters.Add((New-Object System.Windows.Setter ([System.Windows.FrameworkElement]::ToolTipProperty), $tip))
+    $style.Seal()
+    $stack = New-Object System.Collections.Generic.Stack[object]
+    $stack.Push($window)
+    while ($stack.Count) {
+        $el = $stack.Pop()
+        if ($el -is [System.Windows.Controls.DataGrid]) {
+            foreach ($c in $el.Columns) {
+                if ($c -is [System.Windows.Controls.DataGridTextColumn] -and $c.ElementStyle -eq [System.Windows.Controls.DataGridTextColumn]::DefaultElementStyle) { $c.ElementStyle = $style }
+            }
+            continue
+        }
+        foreach ($c in [System.Windows.LogicalTreeHelper]::GetChildren($el)) {
+            if ($c -is [System.Windows.DependencyObject]) { $stack.Push($c) }
+        }
+    }
+}
+
 function Set-WTTileWidth($Panel) {
     $w = $Panel.ActualWidth
     if ($w -le 0) { return }
@@ -1158,6 +1185,7 @@ $ui.TxtAboutCopyright.Text = $(try {
         ((Get-Content (Join-Path $PSScriptRoot 'LICENSE') -TotalCount 5 -ErrorAction Stop) -match '^Copyright' | Select-Object -First 1) -replace '^Copyright \(c\)', ([string][char]0xA9)
     } catch { '' })
 Initialize-WTTileRows
+Initialize-WTGridColumns
 $window.Icon = New-WTAppIcon 64
 $window.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 Set-WTTheme $settings.Theme

@@ -9,6 +9,8 @@ function Get-WTInstalledProgram {
         if ($h.PSChildName -notmatch '^S-1-(5-21|12-1)-[\d-]+$') { continue }
         $n = Resolve-WTSidName $h.PSChildName
         if (-not $n) { $n = $h.PSChildName }
+        # local accounts without the computer name ("User mario" instead of "User PC01\mario")
+        $n = $n -replace "^$([regex]::Escape($env:COMPUTERNAME))\\", ''
         $sources.Add(@{ Key = "HKEY_USERS\$($h.PSChildName)\Software\Microsoft\Windows\CurrentVersion\Uninstall"; Scope = "User $n" })
     }
 

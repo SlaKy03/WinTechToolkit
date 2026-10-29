@@ -60,6 +60,28 @@ public static class WTWindowHelper {
     }
 }
 
+// Table cells cut with "..." show the whole text in a tooltip: the tooltip of the TextBlocks
+// marked with Tag "TrimTip" opens only when the text does not fit.
+public static class WTTrimToolTip {
+    static bool registered;
+
+    public static void Register() {
+        if (registered) return;
+        registered = true;
+        EventManager.RegisterClassHandler(typeof(TextBlock), FrameworkElement.ToolTipOpeningEvent, new ToolTipEventHandler(OnOpening));
+    }
+
+    static void OnOpening(object sender, ToolTipEventArgs e) {
+        TextBlock tb = sender as TextBlock;
+        if (tb == null || !"TrimTip".Equals(tb.Tag)) return;
+        if (string.IsNullOrEmpty(tb.Text)) { e.Handled = true; return; }
+        FormattedText ft = new FormattedText(tb.Text, System.Globalization.CultureInfo.CurrentUICulture, tb.FlowDirection,
+            new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black,
+            VisualTreeHelper.GetDpi(tb).PixelsPerDip);
+        if (ft.WidthIncludingTrailingWhitespace <= tb.ActualWidth + 1) e.Handled = true;
+    }
+}
+
 // The maximize button area is reported to Windows as HTMAXBUTTON, so that Windows 11
 // shows Snap Layouts on hover. Windows then sends non-client messages instead of the
 // WPF mouse events: hover and click are handled here.

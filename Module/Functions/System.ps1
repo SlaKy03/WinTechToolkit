@@ -100,7 +100,7 @@ function Get-WTSystemInfo {
         Add-Line "Volume $($d.DeviceID)" ('{0} free of {1} ({2}% free)' -f (Format-WTSize $d.FreeSpace), (Format-WTSize $d.Size), $pct)
     }
     foreach ($pd in Get-WTPhysicalDiskInfo) {
-        Add-Line 'Physical disk' ('{0} - {1} - {2} - Status: {3}' -f $pd.Name, $pd.MediaType, $pd.SizeText, $pd.Health)
+        Add-Line 'Physical disk' ('{0} - {1} {2} - {3} - {4}' -f $pd.Name, $pd.MediaType, $pd.BusType, $pd.SizeText, $pd.Health)
     }
 
     $L.Add(''); $L.Add('=== SECURITY ===')
@@ -169,6 +169,31 @@ function Get-WTSystemSummary {
     }
 }
 
+function ConvertTo-WTStorageText {
+    # In the GUI runspaces the Storage type data is not always applied and the MSFT_PhysicalDisk
+    # properties come back as raw codes (e.g. MediaType 4, HealthStatus 0)
+    param($Value, [hashtable]$Map)
+    $s = "$Value"
+    if ($s -match '^\d+$' -and $Map.ContainsKey([int]$s)) { return $Map[[int]$s] }
+    $s
+}
+
+$script:WTMediaTypes = @{ 0 = 'Unspecified'; 3 = 'HDD'; 4 = 'SSD'; 5 = 'SCM' }
+$script:WTHealthStates = @{ 0 = 'Healthy'; 1 = 'Warning'; 2 = 'Unhealthy'; 5 = 'Unknown' }
+$script:WTBusTypes = @{
+    0 = 'Unknown'; 1 = 'SCSI'; 2 = 'ATAPI'; 3 = 'ATA'; 4 = '1394'; 5 = 'SSA'; 6 = 'Fibre Channel'; 7 = 'USB'; 8 = 'RAID'
+    9 = 'iSCSI'; 10 = 'SAS'; 11 = 'SATA'; 12 = 'SD'; 13 = 'MMC'; 14 = 'Virtual'; 15 = 'File Backed Virtual'
+    16 = 'Storage Spaces'; 17 = 'NVMe'; 18 = 'SCM'; 19 = 'UFS'
+}
+$script:WTOperationalStates = @{
+    0 = 'Unknown'; 1 = 'Other'; 2 = 'OK'; 3 = 'Degraded'; 4 = 'Stressed'; 5 = 'Predictive Failure'; 6 = 'Error'
+    7 = 'Non-Recoverable Error'; 8 = 'Starting'; 9 = 'Stopping'; 10 = 'Stopped'; 11 = 'In Service'; 12 = 'No Contact'
+    13 = 'Lost Communication'; 14 = 'Aborted'; 15 = 'Dormant'; 16 = 'Supporting Entity in Error'; 17 = 'Completed'
+    18 = 'Power Mode'; 53264 = 'In Maintenance'; 53265 = 'Not Usable'; 53266 = 'Transient Error'; 53267 = 'Starting'
+    53268 = 'Stopping'; 53269 = 'Failed Media'; 53270 = 'Split'; 53271 = 'Stale Metadata'; 53272 = 'IO Error'
+    53273 = 'Unrecognized Metadata'
+}
+
 function Get-WTPhysicalDiskInfo {
     # Physical disks with the SMART counters exposed by Windows
     try { $disks = @(Get-PhysicalDisk -ErrorAction Stop) } catch { return }
@@ -177,11 +202,11 @@ function Get-WTPhysicalDiskInfo {
         try { $c = $d | Get-StorageReliabilityCounter -ErrorAction Stop } catch { }
         [pscustomobject]@{
             Name        = $d.FriendlyName
-            MediaType   = "$($d.MediaType)"
-            BusType     = "$($d.BusType)"
+            MediaType   = ConvertTo-WTStorageText $d.MediaType $script:WTMediaTypes
+            BusType     = ConvertTo-WTStorageText $d.BusType $script:WTBusTypes
             SizeText    = Format-WTSize $d.Size
-            Health      = "$($d.HealthStatus)"
-            Operational = (@($d.OperationalStatus) -join ', ')
+            Health      = ConvertTo-WTStorageText $d.HealthStatus $script:WTHealthStates
+            Operational = (@($d.OperationalStatus | ForEach-Object { ConvertTo-WTStorageText $_ $script:WTOperationalStates }) -join ', ')
             Temperature = $(if ($c -and $c.Temperature) { $c.Temperature } else { $null })
             Wear        = $(if ($c) { $c.Wear } else { $null })
             PowerOnHours = $(if ($c) { $c.PowerOnHours } else { $null })

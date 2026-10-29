@@ -56,8 +56,10 @@ $pageXaml = @"
         </StackPanel>
       </Border>
       <TextBlock Style="{StaticResource SectionTitle}" Text="Tools"/>
-      $(New-Tile -Name 'BtnRestorePoint' -Glyph '&#xE777;' -Title 'Create restore point' -Desc 'Bypasses the one-per-24-hours limit' -Width 360)
-      $(New-Tile -Name 'BtnBattery' -Glyph '&#xE83F;' -Title 'Battery report' -Desc 'powercfg /batteryreport (laptops)' -Width 360)
+      <WrapPanel>
+        $(New-Tile -Name 'BtnRestorePoint' -Glyph '&#xE777;' -Title 'Create restore point' -Desc 'Bypasses the one-per-24-hours limit')
+        $(New-Tile -Name 'BtnBattery' -Glyph '&#xE83F;' -Title 'Battery report' -Desc 'powercfg /batteryreport (laptops)')
+      </WrapPanel>
       <TextBlock Style="{StaticResource SectionTitle}" Text="Windows consoles" Margin="0,8,0,10"/>
       <WrapPanel>$consoleXaml</WrapPanel>
     </StackPanel>

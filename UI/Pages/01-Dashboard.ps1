@@ -50,7 +50,7 @@ function Update-WTDashboard {
         $stabLevel = if ($s.Bsod) { 'Err' } elseif ($s.Unexpected -or $s.AppCrash -ge 5) { 'Warn' } else { 'Ok' }
         $stabText = if ($s.Bsod -or $s.Unexpected) { "$($s.Bsod) BSODs · $($s.Unexpected) shutdowns" } else { 'No abnormal shutdowns' }
         Set-WTDash 'Stab' $stabText "$($s.AppCrash) application crashes" $stabLevel
-        $ui.TxtHeaderInfo.Text = '{0}  ·  {1}  ·  signed-in user: {2}  ·  running as {3}' -f $s.Computer, $s.Domain, $(if ($s.User) { $s.User } else { 'none' }), $identity.Name
+        Set-WTHeaderInfo -Domain $s.Domain -User $s.User -Loaded
     }
 }
 

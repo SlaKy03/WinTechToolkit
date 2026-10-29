@@ -36,6 +36,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 $modulePath = Join-Path $PSScriptRoot 'Module\WinTechToolkit.psm1'
 Import-Module $modulePath -Force -DisableNameChecking
 . (Join-Path $PSScriptRoot 'UI\Styles.ps1')
+. (Join-Path $PSScriptRoot 'UI\Window.ps1')
 
 $app = @{ Name = 'WinTech Toolkit'; Version = 'dev'; Repository = '' }
 try { (Get-Content (Join-Path $PSScriptRoot 'app.json') -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $app[$_.Name] = $_.Value } } catch { }
@@ -62,11 +63,11 @@ $script:UserPanels = New-Object System.Collections.Generic.List[string]
 function X([string]$Text) { [Security.SecurityElement]::Escape($Text) }
 
 function New-Tile {
-    param([string]$Name, [string]$Glyph, [string]$Title, [string]$Desc, [switch]$Danger, [int]$Width = 0)
+    # in a WrapPanel the width is set by Initialize-WTTileRows
+    param([string]$Name, [string]$Glyph, [string]$Title, [string]$Desc, [switch]$Danger)
     $icon = if ($Danger) { 'ErrBrush' } else { 'AccentBrush' }
-    $w = if ($Width) { " Width=`"$Width`"" } else { '' }
 @"
-<Button x:Name="$Name" Style="{StaticResource Tile}"$w ToolTip="$(X $Desc)">
+<Button x:Name="$Name" Style="{StaticResource Tile}" ToolTip="$(X $Desc)">
   <Grid>
     <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <Border Width="34" Height="34" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}" VerticalAlignment="Center" HorizontalAlignment="Left">
@@ -179,12 +180,17 @@ $xaml = @"
           <Button x:Name="BtnClose" Style="{StaticResource CloseButton}" Content="&#xE8BB;" ToolTip="Close"/>
         </StackPanel>
         <Button x:Name="BtnNavToggle" DockPanel.Dock="Left" Style="{StaticResource CaptionButton}" Width="62" FontSize="15" Content="&#xE700;" ToolTip="Collapse / expand the menu"/>
-        <Border DockPanel.Dock="Left" Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
+        <Border x:Name="AppLogo" DockPanel.Dock="Left" Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
           <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
-        <StackPanel VerticalAlignment="Center">
-          <TextBlock FontSize="14" FontWeight="Bold" Text="$(X $app.Name)"/>
-          <TextBlock x:Name="TxtHeaderInfo" FontSize="11" Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis"/>
+        <StackPanel x:Name="TitleArea" VerticalAlignment="Center" Margin="0,0,12,0">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock FontSize="14" FontWeight="Bold" Text="$(X $app.Name)" VerticalAlignment="Center"/>
+            <Border x:Name="TitleBadge" Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="5,0,5,1" Margin="8,1,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+              <TextBlock x:Name="TxtTitleBadge" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+            </Border>
+          </StackPanel>
+          <TextBlock x:Name="TxtHeaderInfo" FontSize="11" Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
         </StackPanel>
       </DockPanel>
     </Border>
@@ -290,10 +296,75 @@ $xaml = @"
           <TextBlock x:Name="TxtQueue" Foreground="{DynamicResource WarnBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0"/>
           <Button x:Name="BtnToggleLog" Style="{StaticResource LinkButton}" Content="Hide activity log (Ctrl+L)"/>
         </StackPanel>
-        <ProgressBar x:Name="PbBusy" Width="140" Height="4" Visibility="Hidden" VerticalAlignment="Center"/>
-        <TextBlock x:Name="TxtStatus" Text="Ready" FontSize="12" Margin="10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        <ProgressBar x:Name="PbBusy" Width="140" Height="4" Margin="0,0,10,0" Visibility="Collapsed" VerticalAlignment="Center"/>
+        <TextBlock x:Name="TxtStatus" Text="Ready" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
       </DockPanel>
     </Border>
+
+    <Grid x:Name="AboutOverlay" Grid.Row="1" Grid.RowSpan="3" Background="{DynamicResource OverlayBrush}" Visibility="Collapsed">
+      <Grid Width="560" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+        <!-- shadow on a separate layer: an effect on the card would blur its text -->
+        <Border Background="{DynamicResource CardBrush}" CornerRadius="12">
+          <Border.Effect><DropShadowEffect BlurRadius="32" ShadowDepth="8" Direction="270" Opacity="0.4" Color="Black"/></Border.Effect>
+        </Border>
+        <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="12">
+          <StackPanel>
+            <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="11,11,0,0" Padding="26,24,14,22">
+              <DockPanel>
+                <Button x:Name="BtnAboutClose" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8BB;" VerticalAlignment="Top" ToolTip="Close (Esc)"/>
+                <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource AccentBrush}" Margin="0,0,20,0" VerticalAlignment="Center">
+                  <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="30" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="$(X $app.Name)" FontSize="24" FontWeight="Bold"/>
+                  <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                    <TextBlock x:Name="TxtAboutVersion" Foreground="{DynamicResource SubtleBrush}" VerticalAlignment="Center"/>
+                    <Border x:Name="AboutBadge" Background="{DynamicResource AccentBrush}" CornerRadius="4" Padding="6,0,6,1" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                      <TextBlock x:Name="TxtAboutBadge" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}"/>
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Text="Diagnostics, repair and maintenance for Windows 10/11." Margin="0,8,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Grid Margin="26,18,26,6">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <Grid.Resources>
+                <Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
+              </Grid.Resources>
+              <TextBlock x:Name="LblAboutPackage" Grid.Row="0" Text="Package" Foreground="{DynamicResource SubtleBrush}"/>
+              <TextBlock x:Name="TxtAboutPackage" Grid.Row="0" Grid.Column="1"/>
+              <TextBlock Grid.Row="1" Text="Windows" Foreground="{DynamicResource SubtleBrush}"/>
+              <TextBlock x:Name="TxtAboutWindows" Grid.Row="1" Grid.Column="1"/>
+              <TextBlock Grid.Row="2" Text="PowerShell" Foreground="{DynamicResource SubtleBrush}"/>
+              <TextBlock x:Name="TxtAboutPs" Grid.Row="2" Grid.Column="1"/>
+              <TextBlock Grid.Row="3" Text="Running as" Foreground="{DynamicResource SubtleBrush}"/>
+              <TextBlock x:Name="TxtAboutUser" Grid.Row="3" Grid.Column="1"/>
+              <TextBlock Grid.Row="4" Text="Data and logs" Foreground="{DynamicResource SubtleBrush}"/>
+              <Button x:Name="BtnAboutData" Grid.Row="4" Grid.Column="1" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" ToolTip="Open the folder"/>
+              <TextBlock Grid.Row="5" Text="Today's log" Foreground="{DynamicResource SubtleBrush}"/>
+              <Button x:Name="BtnAboutLog" Grid.Row="5" Grid.Column="1" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" ToolTip="Open in Notepad"/>
+            </Grid>
+            <WrapPanel Margin="26,4,20,14">
+              $(New-Pill -Name 'BtnAboutProject' -Glyph '&#xE774;' -Text 'Project page' -Primary)
+              $(New-Pill -Name 'BtnAboutIssue' -Glyph '&#xED15;' -Text 'Report a problem' -ToolTip 'Opens a new issue on GitHub; attach the copied info')
+              $(New-Pill -Name 'BtnAboutReleases' -Glyph '&#xE896;' -Text 'Releases')
+              $(New-Pill -Name 'BtnAboutCopy' -Glyph '&#xE8C8;' -Text 'Copy info' -ToolTip 'Version, Windows and PowerShell, for a bug report')
+            </WrapPanel>
+            <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="26,10,26,12">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="MIT License" FontSize="11.5" Foreground="{DynamicResource SubtleBrush}"/>
+                <TextBlock x:Name="TxtAboutCopyright" FontSize="11.5" Foreground="{DynamicResource SubtleBrush}"/>
+              </DockPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Grid>
   </Grid>
   </Border>
 </Window>
@@ -374,6 +445,114 @@ function Set-WTTheme([string]$Name) {
     $window.Resources[[System.Windows.SystemColors]::ControlBrushKey] = $window.Resources['CardBrush']
     $settings.Theme = $Name
     $ui.BtnTheme.Content = $(if ($Name -eq 'Dark') { [string][char]0xE706 } else { [string][char]0xE708 })
+    if ($script:DwmFrame) { [WTWindowHelper]::SetBorderColor($script:Hwnd, $window.Resources['LineBrush'].Color) }
+}
+
+function Update-WTWindowFrame {
+    $max = $window.WindowState -eq 'Maximized'
+    # with WindowChrome a maximized window overflows the screen by the resize frame
+    $ui.RootBorder.Margin = $(if ($max) { [WTWindowHelper]::MaximizedInset($window) } else { New-Object System.Windows.Thickness 0 })
+    # on Windows 11 the border is drawn by DWM, together with the rounded corners
+    $ui.RootBorder.BorderThickness = New-Object System.Windows.Thickness $(if ($max -or $script:DwmFrame) { 0 } else { 1 })
+    $ui.BtnMax.Content = $(if ($max) { [string][char]0xE923 } else { [string][char]0xE922 })
+    $ui.BtnMax.ToolTip = $(if ($max) { 'Restore' } else { 'Maximize' })
+}
+
+function Format-WTAccount([string]$Name) {
+    # local accounts without the computer name
+    if ($Name -like "$env:COMPUTERNAME\*") { return $Name.Substring($env:COMPUTERNAME.Length + 1) }
+    $Name
+}
+
+function Set-WTHeaderInfo([string]$Domain, [string]$User, [switch]$Loaded) {
+    $me = Format-WTAccount $identity.Name
+    $parts = @($env:COMPUTERNAME)
+    $tip = @("Computer: $env:COMPUTERNAME")
+    if ($Domain) { $parts += ($Domain -replace '^Workgroup ', ''); $tip += "Domain: $Domain" }
+    if ($Loaded) {
+        $u = if ($User) { Format-WTAccount $User } else { '' }
+        $parts += $(if ($u) { "signed in: $u" } else { 'nobody signed in' })
+        $tip += "Signed-in user: $(if ($User) { $User } else { 'none' })"
+        # the toolkit often runs with another administrator account: show it only then
+        if ($u -ne $me) { $parts += "running as $me" }
+    } else {
+        $parts += "running as $me"
+    }
+    $tip += "Toolkit running as: $($identity.Name)"
+    $ui.TxtHeaderInfo.Text = $parts -join '  ·  '
+    $ui.TxtHeaderInfo.ToolTip = $tip -join "`n"
+}
+
+function Initialize-WTTileRows {
+    # Rows of tiles share the width equally, so they line up with the cards around them
+    $tileStyle = $window.FindResource('Tile')
+    $stack = New-Object System.Collections.Generic.Stack[object]
+    $stack.Push($window)
+    while ($stack.Count) {
+        $el = $stack.Pop()
+        if ($el -is [System.Windows.Controls.WrapPanel] -and $el.Children.Count -and
+            -not @($el.Children | Where-Object { -not ($_ -is [System.Windows.Controls.Button] -and $_.Style -eq $tileStyle) }).Count) {
+            # the right margin of the last tile goes outside the panel
+            $m = $el.Margin
+            $el.Margin = New-Object System.Windows.Thickness $m.Left, $m.Top, ($m.Right - 10), $m.Bottom
+            $el.Add_SizeChanged({ param($s) Set-WTTileWidth $s })
+            continue
+        }
+        foreach ($c in [System.Windows.LogicalTreeHelper]::GetChildren($el)) {
+            if ($c -is [System.Windows.DependencyObject]) { $stack.Push($c) }
+        }
+    }
+}
+
+function Set-WTTileWidth($Panel) {
+    $w = $Panel.ActualWidth
+    if ($w -le 0) { return }
+    $cols = [Math]::Max(1, [Math]::Floor($w / 270))
+    $tileWidth = [Math]::Floor($w / $cols) - 10
+    foreach ($t in $Panel.Children) { if ($t.Width -ne $tileWidth) { $t.Width = $tileWidth } }
+}
+
+function Get-WTWindowsText {
+    try {
+        $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+        # ProductName still says "Windows 10" on Windows 11
+        $name = "$($cv.ProductName)"
+        if ([int]$cv.CurrentBuildNumber -ge 22000) { $name = $name -replace 'Windows 10', 'Windows 11' }
+        '{0} {1} (build {2}.{3})' -f $name, $cv.DisplayVersion, $cv.CurrentBuildNumber, $cv.UBR
+    } catch { [Environment]::OSVersion.VersionString }
+}
+
+function Get-WTAboutText {
+    $lines = @("$($app.Name) $($app.Version)")
+    if ($env:WTK_PACKAGE) { $lines += "Package: $env:WTK_PACKAGE" }
+    $lines += "Windows: $script:WindowsText"
+    $lines += "PowerShell: $($PSVersionTable.PSVersion) ($([IntPtr]::Size * 8)-bit)"
+    $lines += "Domain-joined: $(if ((Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).PartOfDomain) { 'yes' } else { 'no' })"
+    $lines -join "`r`n"
+}
+
+function Show-WTAbout {
+    if (-not $script:WindowsText) { $script:WindowsText = Get-WTWindowsText }
+    $ui.TxtAboutVersion.Text = "Version $($app.Version)"
+    $ui.LblAboutPackage.Visibility = $(if ($env:WTK_PACKAGE) { 'Visible' } else { 'Collapsed' })
+    $ui.TxtAboutPackage.Visibility = $ui.LblAboutPackage.Visibility
+    $ui.TxtAboutPackage.Text = "$env:WTK_PACKAGE"
+    $ui.TxtAboutWindows.Text = $script:WindowsText
+    $ui.TxtAboutPs.Text = "$($PSVersionTable.PSVersion) ($([IntPtr]::Size * 8)-bit)"
+    $ui.TxtAboutUser.Text = "$($identity.Name) (administrator)"
+    $ui.BtnAboutData.Content = $dataDir
+    $ui.BtnAboutLog.Content = Split-Path $global:WTLogFile -Leaf
+    foreach ($b in 'BtnAboutProject', 'BtnAboutIssue', 'BtnAboutReleases') { $ui[$b].IsEnabled = [bool]$script:RepoUrl }
+    $ui.AboutOverlay.Opacity = 0
+    $ui.AboutOverlay.Visibility = 'Visible'
+    $ui.AboutOverlay.BeginAnimation([System.Windows.UIElement]::OpacityProperty,
+        (New-Object System.Windows.Media.Animation.DoubleAnimation 0, 1, ([System.Windows.Duration][TimeSpan]::FromMilliseconds(140))))
+    [void]$ui.BtnAboutClose.Focus()
+}
+
+function Hide-WTAbout {
+    $ui.AboutOverlay.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $null)
+    $ui.AboutOverlay.Visibility = 'Collapsed'
 }
 
 function Set-WTLogVisible([bool]$Visible) {
@@ -418,7 +597,7 @@ function Update-WTLayout {
 
 function Set-WTBusy([bool]$Busy, [string]$Text = '') {
     $ui.PbBusy.IsIndeterminate = $Busy
-    $ui.PbBusy.Visibility = $(if ($Busy) { 'Visible' } else { 'Hidden' })
+    $ui.PbBusy.Visibility = $(if ($Busy) { 'Visible' } else { 'Collapsed' })
     $ui.TxtStatus.Text = $(if ($Busy) { "Running: $Text" } else { 'Ready' })
 }
 
@@ -601,12 +780,25 @@ On 'BtnMax' { $window.WindowState = $(if ($window.WindowState -eq 'Maximized') {
 On 'BtnClose' { $window.Close() }
 On 'BtnTheme' { Set-WTTheme $(if ($settings.Theme -eq 'Dark') { 'Light' } else { 'Dark' }) }
 On 'BtnNavToggle' { Set-WTSidebar (-not [bool]$settings.SidebarExpanded) }
-$window.Add_StateChanged({
-        # with WindowChrome a maximized window overflows the screen by a few pixels
-        $ui.RootBorder.Margin = New-Object System.Windows.Thickness $(if ($window.WindowState -eq 'Maximized') { 7 } else { 0 })
-        $ui.BtnMax.Content = $(if ($window.WindowState -eq 'Maximized') { [string][char]0xE923 } else { [string][char]0xE922 })
-    })
+$window.Add_StateChanged({ Update-WTWindowFrame })
 $window.Add_SizeChanged({ Update-WTLayout })
+$window.Add_SourceInitialized({
+        $script:Hwnd = (New-Object System.Windows.Interop.WindowInteropHelper $window).Handle
+        if ([WTWindowHelper]::RoundCorners($script:Hwnd)) {
+            # Windows 11: rounded corners, DWM border in the theme colour; a minimal glass
+            # frame brings back the window shadow
+            $script:DwmFrame = $true
+            [System.Windows.Shell.WindowChrome]::GetWindowChrome($window).GlassFrameThickness = New-Object System.Windows.Thickness 0, 0, 0, 1
+            [WTWindowHelper]::SetBorderColor($script:Hwnd, $window.Resources['LineBrush'].Color)
+        }
+        # added after the WindowChrome hook, so it sees the messages first
+        $script:SnapHook = New-Object WTSnapLayoutHook $window, $ui.BtnMax, 'CardHoverBrush'
+        $script:SnapHook.Attach()
+        Update-WTWindowFrame
+    })
+# like the system title bar, the title fades when the window is not active
+$window.Add_Activated({ $ui.TitleArea.Opacity = 1; $ui.AppLogo.Opacity = 1 })
+$window.Add_Deactivated({ $ui.TitleArea.Opacity = 0.55; $ui.AppLogo.Opacity = 0.55 })
 
 foreach ($p in $script:Pages) {
     On "Nav_$($p.Id)" -EventName 'Checked' {
@@ -616,16 +808,19 @@ foreach ($p in $script:Pages) {
     }
 }
 On 'NavData' { param($s) $s.IsChecked = $false; Start-Process explorer.exe -ArgumentList "`"$dataDir`"" }
-On 'NavAbout' {
-    param($s)
-    $s.IsChecked = $false
-    $url = if ($app.Repository -and $app.Repository -notlike 'OWNER/*') { "https://github.com/$($app.Repository)" } else { '' }
-    $pkg = if ($env:WTK_PACKAGE) { "`nPackage: $env:WTK_PACKAGE" } else { '' }
-    $msg = "$($app.Name) $($app.Version)$pkg`n`nDiagnostics, repair and maintenance for Windows 10/11.`n`nData and logs: $dataDir"
-    if ($url) {
-        if ([System.Windows.MessageBox]::Show($window, "$msg`n`nOpen the project page?`n$url", $app.Name, 'YesNo', 'Information') -eq 'Yes') { Start-Process $url }
-    } else { Show-WTInfo $msg }
-}
+On 'NavAbout' { param($s) $s.IsChecked = $false; Show-WTAbout }
+On 'BtnAboutClose' { Hide-WTAbout }
+$ui.AboutOverlay.Add_MouseLeftButtonDown({
+        param($s, $e)
+        # click on the dimmed area outside the card
+        if ($e.OriginalSource -eq $ui.AboutOverlay) { Hide-WTAbout }
+    })
+On 'BtnAboutProject' { Start-Process $script:RepoUrl }
+On 'BtnAboutIssue' { Set-WTClipboard (Get-WTAboutText); Start-Process "$script:RepoUrl/issues/new/choose" }
+On 'BtnAboutReleases' { Start-Process "$script:RepoUrl/releases" }
+On 'BtnAboutCopy' { Set-WTClipboard (Get-WTAboutText) }
+On 'BtnAboutData' { Start-Process explorer.exe -ArgumentList "`"$dataDir`"" }
+On 'BtnAboutLog' { if (Test-Path -LiteralPath $global:WTLogFile) { Start-Process notepad.exe -ArgumentList "`"$global:WTLogFile`"" } }
 On 'ChkSimulate' {
     $on = Get-WTSimulate
     $ui.SimBanner.Visibility = $(if ($on) { 'Visible' } else { 'Collapsed' })
@@ -643,6 +838,9 @@ $window.Add_PreviewKeyDown({
         param($s, $e)
         $ctrl = ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
         $page = $script:Pages[$ui.Tabs.SelectedIndex]
+        if ($ui.AboutOverlay.IsVisible) {
+            if ($e.Key -eq [System.Windows.Input.Key]::Escape) { Hide-WTAbout; $e.Handled = $true; return }
+        }
         if ($ctrl -and $e.Key -ge [System.Windows.Input.Key]::D1 -and $e.Key -le [System.Windows.Input.Key]::D9) {
             Select-WTPage ([int]$e.Key - [int][System.Windows.Input.Key]::D1); $e.Handled = $true; return
         }
@@ -683,8 +881,19 @@ $window.Left = $wa.Left + ($wa.Width - $window.Width) / 2
 $window.Top = $wa.Top + ($wa.Height - $window.Height) / 2
 if ($wa.Width -lt 1100 -or $wa.Height -lt 650) { $window.WindowState = 'Maximized' }
 
-$ui.TxtHeaderInfo.Text = "$env:COMPUTERNAME  ·  running as $($identity.Name)"
+Set-WTHeaderInfo
 $ui.TxtVersion.Text = "Version $($app.Version)"
+$script:RepoUrl = if ($app.Repository -and $app.Repository -notlike 'OWNER/*') { "https://github.com/$($app.Repository)" } else { '' }
+# "0.9.0-beta" -> BETA badge next to the name
+$badge = if ($app.Version -match '-([A-Za-z]+)') { $Matches[1].ToUpper() } elseif ($app.Version -eq 'dev') { 'DEV' } else { '' }
+foreach ($n in 'Title', 'About') {
+    $ui["Txt${n}Badge"].Text = $badge
+    $ui["${n}Badge"].Visibility = $(if ($badge) { 'Visible' } else { 'Collapsed' })
+}
+$ui.TxtAboutCopyright.Text = $(try {
+        ((Get-Content (Join-Path $PSScriptRoot 'LICENSE') -TotalCount 5 -ErrorAction Stop) -match '^Copyright' | Select-Object -First 1) -replace '^Copyright \(c\)', ([string][char]0xA9)
+    } catch { '' })
+Initialize-WTTileRows
 Set-WTTheme $settings.Theme
 Set-WTLogVisible ([bool]$settings.LogVisible)
 Set-WTSidebar $(if ($null -eq $settings.SidebarExpanded) { $wa.Width -ge 1400 } else { [bool]$settings.SidebarExpanded })

@@ -6,14 +6,14 @@ $script:Themes = @{
         TextBrush = '#CDD6F4'; SubtleBrush = '#A6ADC8'; AccentBrush = '#CBA6F7'; AccentHoverBrush = '#B4BEFE'; AccentSoftBrush = '#463E5E'
         OnAccentBrush = '#11111B'; KnobBrush = '#CDD6F4'; InputBrush = '#181825'; GridAltBrush = '#2A2B3D'; GridHeaderBrush = '#181825'
         SelectionBrush = '#585B70'; ScrollThumbBrush = '#585B70'; OkBrush = '#A6E3A1'; WarnBrush = '#F9E2AF'; ErrBrush = '#F38BA8'
-        ErrHoverBrush = '#EBA0AC'; LogBgBrush = '#11111B'; BannerBrush = '#F9E2AF'; BannerTextBrush = '#11111B'
+        ErrHoverBrush = '#EBA0AC'; LogBgBrush = '#11111B'; BannerBrush = '#F9E2AF'; BannerTextBrush = '#11111B'; OverlayBrush = '#B311111B'
     }
     Light = [ordered]@{
         BgBrush = '#EFF1F5'; PanelBrush = '#E6E9EF'; CardBrush = '#FFFFFF'; CardHoverBrush = '#E6E9EF'; LineBrush = '#CCD0DA'
         TextBrush = '#4C4F69'; SubtleBrush = '#6C6F85'; AccentBrush = '#8839EF'; AccentHoverBrush = '#7A2FD6'; AccentSoftBrush = '#ECE2FD'
         OnAccentBrush = '#FFFFFF'; KnobBrush = '#FFFFFF'; InputBrush = '#FFFFFF'; GridAltBrush = '#F5F6F9'; GridHeaderBrush = '#E6E9EF'
         SelectionBrush = '#DCCBFA'; ScrollThumbBrush = '#ACB0BE'; OkBrush = '#40A02B'; WarnBrush = '#B7791F'; ErrBrush = '#D20F39'
-        ErrHoverBrush = '#B00C30'; LogBgBrush = '#F4F5F8'; BannerBrush = '#F9E2AF'; BannerTextBrush = '#4C4F69'
+        ErrHoverBrush = '#B00C30'; LogBgBrush = '#F4F5F8'; BannerBrush = '#F9E2AF'; BannerTextBrush = '#4C4F69'; OverlayBrush = '#804C4F69'
     }
 }
 

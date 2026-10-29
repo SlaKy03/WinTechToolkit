@@ -13,7 +13,10 @@ function Get-WTNetworkAdapterInfo {
     $cfg = @{}
     foreach ($c in Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue) { $cfg[[int]$c.InterfaceIndex] = $c }
     $status = @{ Up = 'Connected'; Disconnected = 'Disconnected'; Disabled = 'Disabled'; 'Not Present' = 'Not present' }
-    foreach ($a in Get-NetAdapter -ErrorAction SilentlyContinue | Sort-Object Status, Name) {
+    # connected adapters first, then by name
+    $rank = @{ Up = 0; Disconnected = 1; Disabled = 2 }
+    $sortRank = { $r = $rank["$($_.Status)"]; if ($null -eq $r) { 3 } else { $r } }
+    foreach ($a in Get-NetAdapter -ErrorAction SilentlyContinue | Sort-Object $sortRank, Name) {
         $c = $cfg[[int]$a.ifIndex]
         $st = $status["$($a.Status)"]
         if (-not $st) { $st = "$($a.Status)" }

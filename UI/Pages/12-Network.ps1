@@ -41,8 +41,8 @@ $pageXaml = @"
             </ContextMenu>
           </DataGrid.ContextMenu>
           <DataGrid.Columns>
-            <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="150"/>
-            <DataGridTextColumn Header="Status" Binding="{Binding Status, Mode=OneWay}" Width="100"/>
+            <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="200"/>
+            <DataGridTextColumn Header="Status" Binding="{Binding Status, Mode=OneWay}" Width="115"/>
             <DataGridTextColumn Header="IP" Binding="{Binding IP, Mode=OneWay}" Width="120"/>
             <DataGridTextColumn Header="Gateway" Binding="{Binding Gateway, Mode=OneWay}" Width="115"/>
             <DataGridTextColumn Header="DNS" Binding="{Binding DNS, Mode=OneWay}" Width="190"/>

@@ -1,0 +1,20 @@
+# Static checks (encoding, syntax, XAML, controls, functions) on every push and pull request
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Checks
+        shell: powershell
+        run: |
+          $out = & .\Build\Test-Toolkit.ps1
+          $out
+          if ($out -match 'Syntax errors: [1-9]|missing BOM|Missing controls|Undefined functions') { exit 1 }

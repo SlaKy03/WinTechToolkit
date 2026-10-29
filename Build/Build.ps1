@@ -47,11 +47,16 @@ $exePath = Join-Path $OutDir 'WinTechToolkit.exe'
 # "0.9.0-beta" -> assembly version 0.9.0
 $version = if ($app.Version -match '^(\d+(\.\d+){1,3})') { $Matches[1] } else { '1.0.0' }
 $info = Join-Path $env:TEMP 'WinTechToolkit_AssemblyInfo.cs'
+# author and copyright from the LICENSE ("Copyright (c) 2026 Name")
+$copyright = (Get-Content (Join-Path $root 'LICENSE') -TotalCount 5) -match '^Copyright' | Select-Object -First 1
+$owner = if ($copyright -match '^Copyright \(c\) \d{4}\s+(.+)$') { $Matches[1].Trim() } else { $app.Name }
 @"
 using System.Reflection;
 [assembly: AssemblyTitle("$($app.Name)")]
 [assembly: AssemblyProduct("$($app.Name)")]
 [assembly: AssemblyDescription("Diagnostics, repair and maintenance toolkit for Windows 10/11")]
+[assembly: AssemblyCompany("$owner")]
+[assembly: AssemblyCopyright("$copyright")]
 [assembly: AssemblyVersion("$version")]
 [assembly: AssemblyFileVersion("$version")]
 [assembly: AssemblyInformationalVersion("$($app.Version)")]

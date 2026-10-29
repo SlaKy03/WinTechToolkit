@@ -2,7 +2,7 @@
 
 **English** · [Italiano](README.it.md)
 
-> **Beta (0.9.0-beta).** It works and has been tested, but it is not finished: please try it
+> **Beta (0.9.1-beta).** It works and has been tested, but it is not finished: please try it
 > first with **Simulation mode** on, and [report problems](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Many of the actions change the system (delete profiles, uninstall programs, edit the
 > registry). **Use at your own risk**, see [LICENSE](LICENSE).

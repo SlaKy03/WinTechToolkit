@@ -2,7 +2,7 @@
 
 [English](README.md) · **Italiano**
 
-> **Beta (0.9.0-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
+> **Beta (0.9.1-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
 > **modalità Simulazione** attiva e [segnala i problemi](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Molte azioni modificano il sistema (eliminano profili, disinstallano programmi, modificano
 > il registro). **Usalo a tuo rischio**, vedi [LICENSE](LICENSE).

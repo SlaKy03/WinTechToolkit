@@ -11,7 +11,7 @@ body:
     attributes:
       label: WinTech Toolkit version
       description: Shown in the sidebar and in the About box.
-      placeholder: 0.9.0-beta
+      placeholder: 0.9.1-beta
     validations:
       required: true
   - type: dropdown

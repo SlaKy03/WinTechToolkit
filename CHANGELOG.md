@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.1-beta
 
 - Title bar: rounded corners, shadow and themed border on Windows 11, Snap Layouts on the
   maximize button, correct size when maximized at any scaling, title dimmed when the window

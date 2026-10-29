@@ -48,7 +48,7 @@ $dataDir = Get-WTDataFolder
 $global:WTLogFile = Join-Path $dataDir ('Logs\WinTech_{0}_{1:yyyyMMdd}.log' -f $env:COMPUTERNAME, (Get-Date))
 
 $settingsFile = Join-Path $dataDir 'settings.json'
-$settings = @{ Theme = 'Dark'; LogVisible = $true; SidebarExpanded = $null }
+$settings = @{ Theme = 'Dark'; LogVisible = $true; SidebarExpanded = $null; Window = ''; Maximized = $false; LogHeight = 0 }
 if (Test-Path -LiteralPath $settingsFile) {
     try { (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $settings[$_.Name] = $_.Value } } catch { }
 }
@@ -668,7 +668,9 @@ function Hide-WTAbout {
 
 function Set-WTLogVisible([bool]$Visible) {
     if ($Visible) {
-        $h = [Math]::Max(130, [Math]::Round($window.Height * 0.2))
+        # height chosen by the user with the splitter, otherwise 20% of the window
+        $h = if ([int]$settings.LogHeight -ge 80) { [Math]::Min([int]$settings.LogHeight, [Math]::Round($window.Height * 0.6)) }
+        else { [Math]::Max(130, [Math]::Round($window.Height * 0.2)) }
         $ui.LogRow.Height = New-Object System.Windows.GridLength $h
         $ui.SplitRow.Height = New-Object System.Windows.GridLength 6
         $ui.LogPanel.Visibility = 'Visible'
@@ -1111,6 +1113,13 @@ $window.Add_Closing({
         $timer.Stop()
         if ($script:TrayIcon) { $script:TrayIcon.Dispose() }
         Remove-Item -Path (Join-Path $dataDir 'Temp\*') -Recurse -Force -ErrorAction SilentlyContinue
+        # size and position of the window (the normal one, also when maximized) and log height
+        $b = if ($window.WindowState -eq 'Normal') { New-Object System.Windows.Rect $window.Left, $window.Top, $window.ActualWidth, $window.ActualHeight } else { $window.RestoreBounds }
+        if (-not $b.IsEmpty) {
+            $settings.Window = [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0},{1:0},{2:0},{3:0}', $b.Left, $b.Top, $b.Width, $b.Height)
+        }
+        $settings.Maximized = $window.WindowState -eq 'Maximized'
+        if ($settings.LogVisible -and $ui.LogRow.ActualHeight -gt 0) { $settings.LogHeight = [int]$ui.LogRow.ActualHeight }
         try { $settings | ConvertTo-Json | Set-Content -LiteralPath $settingsFile -Encoding UTF8 } catch { }
     })
 
@@ -1123,6 +1132,18 @@ $window.Height = [Math]::Min($h, $wa.Height)
 $window.Left = $wa.Left + ($wa.Width - $window.Width) / 2
 $window.Top = $wa.Top + ($wa.Height - $window.Height) / 2
 if ($wa.Width -lt 1100 -or $wa.Height -lt 650) { $window.WindowState = 'Maximized' }
+# last size and position, if the title bar is still on a screen (monitors may have changed)
+if ("$($settings.Window)" -match '^(-?\d+),(-?\d+),(\d+),(\d+)$') {
+    $saved = New-Object System.Windows.Rect ([double]$Matches[1]), ([double]$Matches[2]), ([double]$Matches[3]), ([double]$Matches[4])
+    $screens = New-Object System.Windows.Rect ([System.Windows.SystemParameters]::VirtualScreenLeft), ([System.Windows.SystemParameters]::VirtualScreenTop),
+        ([System.Windows.SystemParameters]::VirtualScreenWidth), ([System.Windows.SystemParameters]::VirtualScreenHeight)
+    $titleBar = [System.Windows.Rect]::Intersect((New-Object System.Windows.Rect $saved.Left, $saved.Top, $saved.Width, 48), $screens)
+    if (-not $titleBar.IsEmpty -and $titleBar.Width -ge 200 -and $titleBar.Height -ge 30) {
+        $window.Left = $saved.Left; $window.Top = $saved.Top
+        $window.Width = [Math]::Max($saved.Width, $window.MinWidth); $window.Height = [Math]::Max($saved.Height, $window.MinHeight)
+        $window.WindowState = $(if ($settings.Maximized) { 'Maximized' } else { 'Normal' })
+    }
+}
 
 Set-WTHeaderInfo
 $ui.TxtVersion.Text = "Version $($app.Version)"

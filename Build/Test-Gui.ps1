@@ -11,30 +11,34 @@ Set-WTTheme '__THEME__'
 $script:SmokeStep = 0
 $smoke = New-Object System.Windows.Threading.DispatcherTimer
 $smoke.Interval = [TimeSpan]::FromMilliseconds(2500)
+function Save-SmokeShot([string]$FileName) {
+    $window.UpdateLayout()
+    $bmp = New-Object System.Windows.Media.Imaging.RenderTargetBitmap ([int]$window.ActualWidth), ([int]$window.ActualHeight), 96, 96, ([System.Windows.Media.PixelFormats]::Pbgra32)
+    $bmp.Render($window)
+    $enc = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+    $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
+    $fs = [IO.File]::Create((Join-Path '__OUT__' $FileName))
+    $enc.Save($fs); $fs.Close()
+}
 $smoke.Add_Tick({
     $i = $script:SmokeStep
     if ($i -gt 0 -and $i -le $script:Pages.Count) {
-        $p = $script:Pages[$i - 1]
-        $window.UpdateLayout()
-        $bmp = New-Object System.Windows.Media.Imaging.RenderTargetBitmap ([int]$window.ActualWidth), ([int]$window.ActualHeight), 96, 96, ([System.Windows.Media.PixelFormats]::Pbgra32)
-        $bmp.Render($window)
-        $enc = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
-        $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
-        $fs = [IO.File]::Create((Join-Path '__OUT__' ('{0:00}-{1}.png' -f $i, $p.Id)))
-        $enc.Save($fs); $fs.Close()
+        Save-SmokeShot ('{0:00}-{1}.png' -f $i, $script:Pages[$i - 1].Id)
     }
     if ($i -ge $script:Pages.Count) {
         if ($script:SmokeStep -eq $script:Pages.Count) {
+            Show-WTAbout
+            $script:SmokeStep++
+            return
+        }
+        if ($script:SmokeStep -eq $script:Pages.Count + 1) {
+            Save-SmokeShot '98-about.png'
+            Hide-WTAbout
             Set-WTSidebar $false
             $script:SmokeStep++
             return
         }
-        $window.UpdateLayout()
-        $bmp = New-Object System.Windows.Media.Imaging.RenderTargetBitmap ([int]$window.ActualWidth), ([int]$window.ActualHeight), 96, 96, ([System.Windows.Media.PixelFormats]::Pbgra32)
-        $bmp.Render($window)
-        $enc = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
-        $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
-        $fs = [IO.File]::Create((Join-Path '__OUT__' '99-sidebar-collapsed.png')); $enc.Save($fs); $fs.Close()
+        Save-SmokeShot '99-sidebar-collapsed.png'
         $smoke.Stop()
         $lines = @($script:LogItems | ForEach-Object { $_.Line })
         Set-Content -LiteralPath (Join-Path '__OUT__' 'log.txt') -Value $lines -Encoding UTF8

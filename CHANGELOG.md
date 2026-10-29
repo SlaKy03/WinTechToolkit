@@ -13,6 +13,13 @@
   with a colon (e.g. Service Control Manager 7023).
 - Programs: invalid install dates are no longer shown (e.g. "2026-20-22").
 - Uptime without "0 d", wider search boxes, "1 item" instead of "1 items".
+- Stop button in the status bar: stops the running operation and terminates the programs it
+  started (DISM, SFC, CHKDSK...). Closing the window during an operation now offers to stop it.
+- Confirmations and messages use the app theme instead of the white Windows message box.
+- Queued file renames alone no longer show "Restart pending" on the Dashboard and in the reports.
+- Physical disks: type, bus and health as names (e.g. "SSD NVMe - Healthy") instead of codes;
+  the disk health check no longer reports healthy disks as errors when the codes are raw.
+- Placeholders for the ticket report notes and the TCP port test host.
 
 ## 0.9.0-beta
 

@@ -49,8 +49,8 @@ $pageXaml = @"
       <Border Style="{StaticResource Card}">
         <StackPanel>
           <TextBlock Style="{StaticResource SectionTitle}" Text="Ticket report"/>
-          <TextBox x:Name="TxtReportNotes" Height="70" Margin="0,0,0,8" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
-                   VerticalScrollBarVisibility="Auto" ToolTip="Technician notes to include in the report (optional)"/>
+          <TextBox x:Name="TxtReportNotes" Style="{StaticResource HintBox}" Height="70" Margin="0,0,0,8" AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
+                   VerticalScrollBarVisibility="Auto" Tag="Technician notes for the report (optional)" ToolTip="Technician notes to include in the report (optional)"/>
           $(New-Pill -Name 'BtnReport' -Glyph '&#xE8A5;' -Text 'Create HTML report' -Primary)
           <TextBlock Style="{StaticResource Hint}" Text="Summary, event diagnosis, disks, network, programs, startup items, administrators, printers, updates and the activities performed in this session."/>
         </StackPanel>

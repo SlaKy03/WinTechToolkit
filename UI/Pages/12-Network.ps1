@@ -70,7 +70,7 @@ $pageXaml = @"
         </WrapPanel>
         <WrapPanel Margin="0,6,0,0">
           <TextBlock Style="{StaticResource Label}" Text="TCP port test:"/>
-          <TextBox x:Name="TxtPortHost" Width="220" ToolTip="Server name or address"/>
+          <TextBox x:Name="TxtPortHost" Style="{StaticResource HintBox}" Width="220" Tag="Server name or address" ToolTip="Server name or address"/>
           <TextBox x:Name="TxtPortNumber" Width="70" Text="443" HorizontalContentAlignment="Center" ToolTip="Port"/>
           $(New-Pill -Name 'BtnPortTest' -Glyph '&#xE703;' -Text 'Check')
         </WrapPanel>

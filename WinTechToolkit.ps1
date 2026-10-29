@@ -42,6 +42,8 @@ $app = @{ Name = 'WinTech Toolkit'; Version = 'dev'; Repository = '' }
 try { (Get-Content (Join-Path $PSScriptRoot 'app.json') -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $app[$_.Name] = $_.Value } } catch { }
 
 $global:WTQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+# programs started by the operations (process id -> task id), terminated by the Stop button
+$global:WTProcesses = New-Object 'System.Collections.Concurrent.ConcurrentDictionary[int,string]'
 $dataDir = Get-WTDataFolder
 $global:WTLogFile = Join-Path $dataDir ('Logs\WinTech_{0}_{1:yyyyMMdd}.log' -f $env:COMPUTERNAME, (Get-Date))
 
@@ -297,6 +299,9 @@ $xaml = @"
           <Button x:Name="BtnToggleLog" Style="{StaticResource LinkButton}" Content="Hide activity log (Ctrl+L)"/>
         </StackPanel>
         <ProgressBar x:Name="PbBusy" Width="140" Height="4" Margin="0,0,10,0" Visibility="Collapsed" VerticalAlignment="Center"/>
+        <Button x:Name="BtnStop" Style="{StaticResource LinkButton}" Margin="0,0,12,0" Visibility="Collapsed" ToolTip="Stop the running operation">
+          <TextBlock><Run Text="&#xE71A;" FontFamily="Segoe MDL2 Assets" FontSize="10"/><Run Text=" Stop"/></TextBlock>
+        </Button>
         <TextBlock x:Name="TxtStatus" Text="Ready" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
       </DockPanel>
     </Border>
@@ -365,6 +370,40 @@ $xaml = @"
         </Border>
       </Grid>
     </Grid>
+
+    <!-- confirmations and messages (Show-WTConfirm, Show-WTInfo) -->
+    <Grid x:Name="DialogOverlay" Grid.Row="1" Grid.RowSpan="3" Panel.ZIndex="2" Background="{DynamicResource OverlayBrush}" Visibility="Collapsed">
+      <Grid MinWidth="420" MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+        <Border Background="{DynamicResource CardBrush}" CornerRadius="12">
+          <Border.Effect><DropShadowEffect BlurRadius="32" ShadowDepth="8" Direction="270" Opacity="0.4" Color="Black"/></Border.Effect>
+        </Border>
+        <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="12">
+          <DockPanel>
+            <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBrush}" CornerRadius="0,0,11,11" Padding="20,12">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="BtnDlgYes" Style="{StaticResource PillPrimary}" MinWidth="96" Margin="0" Content="Yes"/>
+                <Button x:Name="BtnDlgNo" Style="{StaticResource Pill}" MinWidth="96" Margin="8,0,0,0" Content="No"/>
+              </StackPanel>
+            </Border>
+            <DockPanel Margin="22,20,24,20">
+              <Grid DockPanel.Dock="Left" Width="38" Height="38" VerticalAlignment="Top" Margin="0,0,16,0">
+                <Ellipse x:Name="DlgIconBg" Opacity="0.18"/>
+                <TextBlock x:Name="DlgIcon" FontFamily="Segoe MDL2 Assets" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Grid>
+              <StackPanel>
+                <TextBlock x:Name="TxtDlgTitle" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,8" TextWrapping="Wrap"/>
+                <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <TextBox x:Name="TxtDlgMessage" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" Padding="0" Margin="-2,0,0,0"
+                           Foreground="{DynamicResource TextBrush}" FontSize="13">
+                    <TextBox.Template><ControlTemplate TargetType="TextBox"><ScrollViewer x:Name="PART_ContentHost" Focusable="False"/></ControlTemplate></TextBox.Template>
+                  </TextBox>
+                </ScrollViewer>
+              </StackPanel>
+            </DockPanel>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
   </Grid>
   </Border>
 </Window>
@@ -392,12 +431,60 @@ function On([string]$Name, [scriptblock]$Handler, [string]$EventName = 'Click') 
     $c."Add_$EventName"($Handler)
 }
 
+function Show-WTDialog {
+    <#
+    .SYNOPSIS
+        Modal message in the window theme. Returns $true for Yes/OK.
+        Waits in a nested dispatcher frame, like MessageBox: the timer keeps running.
+    #>
+    param([string]$Message, [string]$Title, [ValidateSet('Info', 'Warning')][string]$Kind = 'Info', [switch]$YesNo)
+    $icon = if ($Kind -eq 'Warning') { 'WarnBrush' } else { 'AccentBrush' }
+    $buttons = if ($YesNo) { 'YesNo' } else { 'OK' }
+    $image = if ($Kind -eq 'Warning') { 'Warning' } else { 'Information' }
+    # a dialog already open (e.g. an operation ending during a confirmation) or no window yet
+    if ($script:DialogFrame -or -not $window.IsVisible) {
+        return ([System.Windows.MessageBox]::Show($window, $Message, $Title, $buttons, $image) -in 'Yes', 'OK')
+    }
+    $ui.TxtDlgTitle.Text = $Title
+    $ui.TxtDlgMessage.Text = $Message
+    $ui.TxtDlgMessage.ScrollToHome()
+    $ui.DlgIcon.Text = $(if ($Kind -eq 'Warning') { [string][char]0xE7BA } else { [string][char]0xE946 })
+    $ui.DlgIcon.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, $icon)
+    $ui.DlgIconBg.SetResourceReference([System.Windows.Shapes.Shape]::FillProperty, $icon)
+    $ui.BtnDlgYes.Content = $(if ($YesNo) { 'Yes' } else { 'OK' })
+    $ui.BtnDlgNo.Visibility = $(if ($YesNo) { 'Visible' } else { 'Collapsed' })
+
+    $focused = [System.Windows.Input.Keyboard]::FocusedElement
+    $script:DialogResult = $false
+    $script:DialogFrame = New-Object System.Windows.Threading.DispatcherFrame
+    $ui.DialogOverlay.Visibility = 'Visible'
+    $ui.DialogOverlay.BeginAnimation([System.Windows.UIElement]::OpacityProperty,
+        (New-Object System.Windows.Media.Animation.DoubleAnimation 0, 1, ([System.Windows.Duration][TimeSpan]::FromMilliseconds(120))))
+    [void]$ui.BtnDlgYes.Focus()
+    $pushed = $false
+    try { [System.Windows.Threading.Dispatcher]::PushFrame($script:DialogFrame); $pushed = $true }
+    catch { }   # dispatcher suspended (e.g. while the window is closing)
+    finally {
+        $script:DialogFrame = $null
+        $ui.DialogOverlay.Visibility = 'Collapsed'
+        if ($focused -is [System.Windows.UIElement] -and $focused.IsVisible) { [void]$focused.Focus() }
+    }
+    if (-not $pushed) { return ([System.Windows.MessageBox]::Show($window, $Message, $Title, $buttons, $image) -in 'Yes', 'OK') }
+    $script:DialogResult
+}
+
+function Close-WTDialog([bool]$Result) {
+    if (-not $script:DialogFrame) { return }
+    $script:DialogResult = $Result
+    $script:DialogFrame.Continue = $false
+}
+
 function Show-WTConfirm([string]$Message, [string]$Title = 'Confirm') {
-    [System.Windows.MessageBox]::Show($window, $Message, $Title, 'YesNo', 'Warning') -eq 'Yes'
+    Show-WTDialog -Message $Message -Title $Title -Kind Warning -YesNo
 }
 
 function Show-WTInfo([string]$Message) {
-    [System.Windows.MessageBox]::Show($window, $Message, $app.Name, 'OK', 'Information') | Out-Null
+    [void](Show-WTDialog -Message $Message -Title $app.Name)
 }
 
 function Get-WTSimulate { [bool]$ui.ChkSimulate.IsChecked }
@@ -598,6 +685,8 @@ function Update-WTLayout {
 function Set-WTBusy([bool]$Busy, [string]$Text = '') {
     $ui.PbBusy.IsIndeterminate = $Busy
     $ui.PbBusy.Visibility = $(if ($Busy) { 'Visible' } else { 'Collapsed' })
+    $ui.BtnStop.Visibility = $ui.PbBusy.Visibility
+    $ui.BtnStop.IsEnabled = $true
     $ui.TxtStatus.Text = $(if ($Busy) { "Running: $Text" } else { 'Ready' })
 }
 
@@ -636,17 +725,28 @@ try { $iss.ExecutionPolicy = 'Bypass' } catch { }
 $iss.ImportPSModule([string[]]@($modulePath))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTQueue', $global:WTQueue, '')))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTLogFile', $global:WTLogFile, '')))
+$iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTProcesses', $global:WTProcesses, '')))
 $script:Pool = [runspacefactory]::CreateRunspacePool(1, 5, $iss, $Host)
 $script:Pool.ApartmentState = 'STA'
 $script:Pool.Open()
 
+$script:TaskWrapper = {
+    param([string]$WTTaskId, [string]$WTScript, [hashtable]$WTParameters)
+    $global:WTTaskId = $WTTaskId
+    & ([scriptblock]::Create($WTScript)) @WTParameters
+}.ToString()
+
 function Invoke-WTTaskNow($Task) {
     $ps = [powershell]::Create()
     $ps.RunspacePool = $script:Pool
-    [void]$ps.AddScript($Task.Script.ToString())
-    if ($Task.Parameters.Count) { [void]$ps.AddParameters($Task.Parameters) }
+    # the runspaces are reused: every task sets its own id (empty for background loads,
+    # whose programs are not stopped by the Stop button). A wrapper and not AddStatement():
+    # with a second statement the pipeline did not start in the pool (PowerShell 5.1).
+    $id = if ($Task.Background) { '' } else { [guid]::NewGuid().ToString('N') }
+    [void]$ps.AddScript($script:TaskWrapper).AddArgument($id).AddArgument($Task.Script.ToString()).AddArgument($Task.Parameters)
     $job = [pscustomobject]@{
         PS = $ps; Handle = $null; Title = $Task.Title; OnComplete = $Task.OnComplete; Start = Get-Date; Background = $Task.Background
+        Id = $id; Cancelled = $false
     }
     if ($Task.Background) {
         $script:BgJobs.Add($job)
@@ -657,6 +757,30 @@ function Invoke-WTTaskNow($Task) {
     }
     $job.Handle = $ps.BeginInvoke()
     Update-WTStatusExtras
+}
+
+function Stop-WTCurrentTask([switch]$Force) {
+    <#
+    .SYNOPSIS
+        Stops the running operation: terminates the programs it started (with their child
+        processes, e.g. DismHost) and stops its runspace. -Force: without asking.
+    #>
+    $job = $script:CurrentJob
+    if (-not $job -or $job.Cancelled) { return }
+    if (-not $Force) {
+        $msg = "Stop '$($job.Title)'?`n`nThe programs it started (e.g. DISM, SFC, CHKDSK) are terminated: run the operation again later to complete it. An uninstaller already running is left to finish."
+        if (-not (Show-WTConfirm $msg 'Stop the operation')) { return }
+        if ($script:CurrentJob -ne $job) { return }   # finished while the question was open
+    }
+    $job.Cancelled = $true
+    $ui.BtnStop.IsEnabled = $false
+    Write-WTLog "Stopping: $($job.Title)..." -Level Warn
+    foreach ($kv in @($global:WTProcesses.GetEnumerator())) {
+        if ($kv.Value -ne $job.Id) { continue }
+        & taskkill.exe /PID $kv.Key /T /F 2>&1 | Out-Null
+    }
+    [void]$job.PS.BeginStop($null, $null)
+    if ($script:TaskQueue.Count) { Write-WTLog "$($script:TaskQueue.Count) queued operations will still run." }
 }
 
 function Start-WTTask {
@@ -688,14 +812,19 @@ function Start-WTTask {
 function Complete-WTJob($Job) {
     $result = $null
     try { $result = $Job.PS.EndInvoke($Job.Handle) }
-    catch { Write-WTLog "$($Job.Title): $($_.Exception.GetBaseException().Message)" -Level Error }
-    foreach ($e in $Job.PS.Streams.Error) { Write-WTLog "$($Job.Title): $e" -Level $(if ($Job.Background) { 'Warn' } else { 'Error' }) }
+    catch { if (-not $Job.Cancelled) { Write-WTLog "$($Job.Title): $($_.Exception.GetBaseException().Message)" -Level Error } }
+    if (-not $Job.Cancelled) {
+        foreach ($e in $Job.PS.Streams.Error) { Write-WTLog "$($Job.Title): $e" -Level $(if ($Job.Background) { 'Warn' } else { 'Error' }) }
+    }
     $Job.PS.Dispose()
-    if (-not $Job.Background) {
+    if ($Job.Cancelled) {
+        Write-WTLog ('=== Stopped: {0} (after {1:hh\:mm\:ss}) ===' -f $Job.Title, ((Get-Date) - $Job.Start))
+    } elseif (-not $Job.Background) {
         Write-WTLog ('=== Done: {0} (duration {1:hh\:mm\:ss}) ===' -f $Job.Title, ((Get-Date) - $Job.Start))
     }
     Update-WTLogView
-    if ($Job.OnComplete) {
+    # a stopped operation returns partial results: the interface is not updated with them
+    if ($Job.OnComplete -and -not $Job.Cancelled) {
         try { & $Job.OnComplete $result }
         catch { Write-WTLog "Updating the interface ($($Job.Title)):$($_.Exception.Message)" -Level Error }
     }
@@ -711,7 +840,7 @@ $timer.Add_Tick({
         }
         $job = $script:CurrentJob
         if ($job) {
-            $ui.TxtStatus.Text = 'Running: {0}  ({1:hh\:mm\:ss})' -f $job.Title, ((Get-Date) - $job.Start)
+            $ui.TxtStatus.Text = '{0}: {1}  ({2:hh\:mm\:ss})' -f $(if ($job.Cancelled) { 'Stopping' } else { 'Running' }), $job.Title, ((Get-Date) - $job.Start)
             if ($job.Handle.IsCompleted) {
                 $script:CurrentJob = $null
                 Set-WTBusy $false
@@ -826,6 +955,9 @@ On 'ChkSimulate' {
     $ui.SimBanner.Visibility = $(if ($on) { 'Visible' } else { 'Collapsed' })
     if ($on) { Write-WTLog 'Simulation mode on: no changes will be applied.' -Level Warn } else { Write-WTLog 'Simulation mode off.' }
 }
+On 'BtnStop' { Stop-WTCurrentTask }
+On 'BtnDlgYes' { Close-WTDialog $true }
+On 'BtnDlgNo' { Close-WTDialog $false }
 On 'BtnToggleLog' { Set-WTLogVisible (-not [bool]$settings.LogVisible) }
 On 'BtnLogHide' { Set-WTLogVisible $false }
 On 'BtnLogClear' { $script:LogItems.Clear() }
@@ -838,6 +970,12 @@ $window.Add_PreviewKeyDown({
         param($s, $e)
         $ctrl = ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
         $page = $script:Pages[$ui.Tabs.SelectedIndex]
+        if ($ui.DialogOverlay.IsVisible) {
+            # Enter = the focused button (Yes/OK by default), Esc = No; no shortcuts meanwhile
+            if ($e.Key -eq [System.Windows.Input.Key]::Escape) { Close-WTDialog (-not $ui.BtnDlgNo.IsVisible); $e.Handled = $true }
+            elseif ($e.Key -eq [System.Windows.Input.Key]::Enter) { Close-WTDialog (-not $ui.BtnDlgNo.IsKeyboardFocused); $e.Handled = $true }
+            return
+        }
         if ($ui.AboutOverlay.IsVisible) {
             if ($e.Key -eq [System.Windows.Input.Key]::Escape) { Hide-WTAbout; $e.Handled = $true; return }
         }
@@ -860,8 +998,10 @@ $window.Add_ContentRendered({
 $window.Add_Closing({
         param($s, $e)
         if ($script:CurrentJob) {
-            $msg = "An operation is still running: $($script:CurrentJob.Title).`nClose anyway? External processes (e.g. SFC/DISM) may keep running in the background."
-            if (-not (Show-WTConfirm $msg)) { $e.Cancel = $true; return }
+            $msg = "An operation is still running: $($script:CurrentJob.Title).`n`nStop it and close? The programs it started (e.g. SFC, DISM) are terminated."
+            if (-not (Show-WTConfirm $msg 'Close')) { $e.Cancel = $true; return }
+            $script:TaskQueue.Clear()
+            Stop-WTCurrentTask -Force
         }
         $script:TaskQueue.Clear()
         Write-WTLog 'Session ended.'

@@ -94,23 +94,31 @@ function Invoke-WTProcess {
         Write-WTLog "Unable to start $FilePath : $($_.Exception.Message)" -Level Error
         return [pscustomobject]@{ ExitCode = -1; Output = @() }
     }
+    # In the GUI the Stop button terminates the programs started by the current operation:
+    # stopping the runspace alone cannot interrupt ReadLine
+    $tracked = ($null -ne $global:WTProcesses) -and $global:WTTaskId
+    if ($tracked) { $global:WTProcesses[$proc.Id] = $global:WTTaskId }
     $proc.StandardInput.Close()
     $errTask = $proc.StandardError.ReadToEndAsync()
 
-    $lastBucket = -1
-    while ($null -ne ($line = $proc.StandardOutput.ReadLine())) {
-        $line = (($line -replace "`0", '') -replace '\s{2,}', ' ').Trim()
-        if (-not $line) { continue }
-        $output.Add($line)
-        if ($NoLog) { continue }
-        if ($line -match '(\d{1,3})(?:[.,]\d+)?\s?%') {
-            $bucket = [math]::Floor([int]$Matches[1] / 10)
-            if ($bucket -eq $lastBucket) { continue }
-            $lastBucket = $bucket
+    try {
+        $lastBucket = -1
+        while ($null -ne ($line = $proc.StandardOutput.ReadLine())) {
+            $line = (($line -replace "`0", '') -replace '\s{2,}', ' ').Trim()
+            if (-not $line) { continue }
+            $output.Add($line)
+            if ($NoLog) { continue }
+            if ($line -match '(\d{1,3})(?:[.,]\d+)?\s?%') {
+                $bucket = [math]::Floor([int]$Matches[1] / 10)
+                if ($bucket -eq $lastBucket) { continue }
+                $lastBucket = $bucket
+            }
+            Write-WTLog "  $line"
         }
-        Write-WTLog "  $line"
+        $proc.WaitForExit()
+    } finally {
+        if ($tracked) { $id = $null; [void]$global:WTProcesses.TryRemove($proc.Id, [ref]$id) }
     }
-    $proc.WaitForExit()
 
     $err = $errTask.Result
     if ($err -and -not $NoLog) {

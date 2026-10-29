@@ -487,6 +487,30 @@ function Show-WTInfo([string]$Message) {
     [void](Show-WTDialog -Message $Message -Title $app.Name)
 }
 
+function Write-WTCrash($Exception) {
+    # Unexpected error in the interface: saved to Logs\Crash_*.txt, the window stays open.
+    # At most one message every 10 seconds, in case the error repeats (e.g. in the timer).
+    try {
+        $err = $Exception
+        while ($err -is [System.Management.Automation.MethodInvocationException] -and $err.InnerException) { $err = $err.InnerException }
+        $where = ''
+        if ($err -is [System.Management.Automation.IContainsErrorRecord] -and $err.ErrorRecord.InvocationInfo) {
+            $where = $err.ErrorRecord.InvocationInfo.PositionMessage
+        }
+        Write-WTLog "Unexpected error in the interface: $($err.Message)" -Level Error
+        $file = Join-Path $dataDir ('Logs\Crash_{0}_{1:yyyyMMdd_HHmmss}.txt' -f $env:COMPUTERNAME, (Get-Date))
+        $text = @("$($app.Name) $($app.Version)", "Windows: $(Get-WTWindowsText)", "PowerShell: $($PSVersionTable.PSVersion)", '',
+            $err.Message, '', $where, '', $Exception.ToString()) -join "`r`n"
+        [IO.File]::WriteAllText($file, $text, [Text.Encoding]::UTF8)
+        Update-WTLogView
+        if ($script:LastCrashShown -and ((Get-Date) - $script:LastCrashShown).TotalSeconds -lt 10) { return }
+        $script:LastCrashShown = Get-Date
+        $script:CrashMessage = "An unexpected error occurred in the interface:`n$($err.Message)`n`nYou can keep working. The details were saved to:`n$file`n`nIf it happens again, please report it with this file."
+        # shown after the dispatcher has finished handling the exception
+        [void]$window.Dispatcher.BeginInvoke([Action]{ Show-WTInfo $script:CrashMessage })
+    } catch { }
+}
+
 function Get-WTSimulate { [bool]$ui.ChkSimulate.IsChecked }
 
 function Format-WTList([object[]]$Items, [scriptblock]$Format, [int]$Max = 20) {
@@ -833,22 +857,26 @@ function Complete-WTJob($Job) {
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(200)
 $timer.Add_Tick({
-        Update-WTLogView
-        foreach ($j in @($script:BgJobs | Where-Object { $_.Handle.IsCompleted })) {
-            [void]$script:BgJobs.Remove($j)
-            Complete-WTJob $j
-        }
-        $job = $script:CurrentJob
-        if ($job) {
-            $ui.TxtStatus.Text = '{0}: {1}  ({2:hh\:mm\:ss})' -f $(if ($job.Cancelled) { 'Stopping' } else { 'Running' }), $job.Title, ((Get-Date) - $job.Start)
-            if ($job.Handle.IsCompleted) {
-                $script:CurrentJob = $null
-                Set-WTBusy $false
-                Complete-WTJob $job
-                if (-not $script:CurrentJob -and $script:TaskQueue.Count) { Invoke-WTTaskNow $script:TaskQueue.Dequeue() }
+        # an exception escaping a Tick handler stops the DispatcherTimer for good
+        # (log, queue and status bar would freeze): it is caught here
+        try {
+            Update-WTLogView
+            foreach ($j in @($script:BgJobs | Where-Object { $_.Handle.IsCompleted })) {
+                [void]$script:BgJobs.Remove($j)
+                Complete-WTJob $j
             }
-        }
-        Update-WTStatusExtras
+            $job = $script:CurrentJob
+            if ($job) {
+                $ui.TxtStatus.Text = '{0}: {1}  ({2:hh\:mm\:ss})' -f $(if ($job.Cancelled) { 'Stopping' } else { 'Running' }), $job.Title, ((Get-Date) - $job.Start)
+                if ($job.Handle.IsCompleted) {
+                    $script:CurrentJob = $null
+                    Set-WTBusy $false
+                    Complete-WTJob $job
+                    if (-not $script:CurrentJob -and $script:TaskQueue.Count) { Invoke-WTTaskNow $script:TaskQueue.Dequeue() }
+                }
+            }
+            Update-WTStatusExtras
+        } catch { Write-WTCrash $_.Exception }
     })
 
 # --- Target users (shared by several sections) -----------------------------------
@@ -909,6 +937,11 @@ On 'BtnMax' { $window.WindowState = $(if ($window.WindowState -eq 'Maximized') {
 On 'BtnClose' { $window.Close() }
 On 'BtnTheme' { Set-WTTheme $(if ($settings.Theme -eq 'Dark') { 'Light' } else { 'Dark' }) }
 On 'BtnNavToggle' { Set-WTSidebar (-not [bool]$settings.SidebarExpanded) }
+$window.Dispatcher.Add_UnhandledException({
+        param($s, $e)
+        $e.Handled = $true
+        Write-WTCrash $e.Exception
+    })
 $window.Add_StateChanged({ Update-WTWindowFrame })
 $window.Add_SizeChanged({ Update-WTLayout })
 $window.Add_SourceInitialized({

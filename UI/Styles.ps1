@@ -292,7 +292,7 @@ function Get-WTStyleXaml {
   <Setter Property="VerticalContentAlignment" Value="Center"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
     <Border x:Name="Bd" CornerRadius="6" BorderThickness="1" BorderBrush="{TemplateBinding BorderBrush}" Background="{TemplateBinding Background}">
-      <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+      <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
     </Border>
     <ControlTemplate.Triggers>
       <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
@@ -306,8 +306,8 @@ function Get-WTStyleXaml {
       <Grid>
         <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource SubtleBrush}" Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
         <TextBlock x:Name="Ph" Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Foreground="{DynamicResource SubtleBrush}"
-                   Margin="31,0,0,0" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False"/>
-        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                   Margin="30,0,0,0" Opacity="0.65" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False"/>
+        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="Center"/>
       </Grid>
     </Border>
     <ControlTemplate.Triggers>
@@ -322,9 +322,9 @@ function Get-WTStyleXaml {
       <Grid>
         <Border Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" IsHitTestVisible="False">
           <TextBlock x:Name="Ph" Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Foreground="{DynamicResource SubtleBrush}"
-                     Margin="3,0,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+                     Margin="2,0,0,0" Opacity="0.65" TextWrapping="Wrap" Visibility="Collapsed"/>
         </Border>
-        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
       </Grid>
     </Border>
     <ControlTemplate.Triggers>
@@ -338,7 +338,7 @@ function Get-WTStyleXaml {
   <Setter Property="FontSize" Value="12"/>
   <Setter Property="IsReadOnly" Value="True"/>
   <Setter Property="Margin" Value="0"/>
-  <Setter Property="Padding" Value="8"/>
+  <Setter Property="Padding" Value="14,12"/>
   <Setter Property="VerticalContentAlignment" Value="Stretch"/>
   <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
   <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>

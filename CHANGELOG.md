@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Search and text boxes: the caret no longer starts in the middle of the placeholder and the
+  typed text sits next to the search icon; placeholders are fainter so they don't look typed.
+- Unexpected errors in the interface no longer close the window: they are written to
+  `Logs\Crash_*.txt` and shown in a message, and the app keeps working.
+- App icon on the taskbar; progress on the taskbar button; when an operation of 15 seconds or
+  more ends while the window is in the background, the button flashes (red if it failed) and
+  a Windows notification appears.
+- Window size, position, maximized state and activity log height are remembered.
+- Tables: long values end with "..." and show the whole text in a tooltip; the Events
+  description column keeps a minimum width; "User slaky" instead of "User PC01\slaky".
+- Checks run on GitHub on every push and pull request, not only for releases.
+
 ## 0.9.1-beta
 
 - Title bar: rounded corners, shadow and themed border on Windows 11, Snap Layouts on the

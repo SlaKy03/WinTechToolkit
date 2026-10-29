@@ -80,7 +80,7 @@ function Get-WTSystemInfo {
     Add-Line 'Architecture' $os.OSArchitecture
     Add-Line 'Installed on' $os.InstallDate.ToString('yyyy-MM-dd HH:mm')
     $up = (Get-Date) - $os.LastBootUpTime
-    Add-Line 'Last boot' ('{0:yyyy-MM-dd HH:mm} (up for {1} d {2} h {3} min)' -f $os.LastBootUpTime, $up.Days, $up.Hours, $up.Minutes)
+    Add-Line 'Last boot' ('{0:yyyy-MM-dd HH:mm} (up for {1})' -f $os.LastBootUpTime, (Format-WTUptime $up))
     $pending = @(Test-WTPendingReboot)
     Add-Line 'Restart pending' $(if ($pending.Count) { 'YES - ' + ($pending -join ', ') } else { 'No' })
     # InstalledOn arrives as an "M/d/yyyy" string and is sometimes empty or in odd formats
@@ -148,7 +148,7 @@ function Get-WTSystemSummary {
         User          = $cs.UserName
         OS            = $os.Caption -replace '^Microsoft\s+', ''
         Version       = '{0} · build {1}.{2}' -f $cv.DisplayVersion, $os.BuildNumber, $cv.UBR
-        Uptime        = '{0} d {1} h {2} min' -f $up.Days, $up.Hours, $up.Minutes
+        Uptime        = Format-WTUptime $up
         UptimeDays    = $up.TotalDays
         LastBoot      = $os.LastBootUpTime.ToString('yyyy-MM-dd HH:mm')
         PendingReboot = [bool]$pending.Count

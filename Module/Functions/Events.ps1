@@ -171,8 +171,10 @@ function Get-WTLogonTypeName {
 function Get-WTEventSummary {
     <# Readable interpretation of the main events. #>
     param($Record, [string]$Message)
-    $first = @(($Message -split "`r?`n") | Where-Object { $_.Trim() }) | Select-Object -First 1
-    $first = "$first".Trim()
+    $lines = @(($Message -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $first = "$($lines | Select-Object -First 1)"
+    # "Service X terminated with the error:" - the useful part is on the next line
+    if ($first.EndsWith(':') -and $lines.Count -gt 1) { $first = "$first $($lines[1])" }
     if ($first.Length -gt 220) { $first = $first.Substring(0, 220) + '...' }
     $p = $Record.ProviderName
     $id = $Record.Id
@@ -352,7 +354,7 @@ function Get-WTProblemReport {
     $up = (Get-Date) - $os.LastBootUpTime
     $R.Add(('PROBLEM DIAGNOSIS - {0} - last {1} days (generated {2:yyyy-MM-dd HH:mm})' -f $env:COMPUTERNAME, $Days, (Get-Date)))
     $R.Add(('=' * 90))
-    $R.Add(('Last boot: {0:yyyy-MM-dd HH:mm} - up for {1} d {2} h' -f $os.LastBootUpTime, $up.Days, $up.Hours))
+    $R.Add(('Last boot: {0:yyyy-MM-dd HH:mm} - up for {1}' -f $os.LastBootUpTime, (Format-WTUptime $up)))
     $pending = @(Test-WTPendingReboot)
     if ($pending.Count) {
         $R.Add("Restart pending: $($pending -join ', ')")

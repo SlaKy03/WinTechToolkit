@@ -127,6 +127,12 @@ function Format-WTSize {
     '{0:N0} B' -f $Bytes
 }
 
+function Format-WTUptime {
+    param([TimeSpan]$Span)
+    if ($Span.Days) { return '{0} d {1} h {2} min' -f $Span.Days, $Span.Hours, $Span.Minutes }
+    '{0} h {1} min' -f $Span.Hours, $Span.Minutes
+}
+
 function Format-WTBool {
     param($Value)
     if ($Value) { 'Yes' } else { 'No' }

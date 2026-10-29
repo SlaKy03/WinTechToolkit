@@ -26,9 +26,12 @@ function Get-WTInstalledProgram {
             $isMsi = ($p.WindowsInstaller -eq 1) -or ($p.UninstallString -match 'msiexec')
 
             $date = ''; $dateSort = ''
-            if ("$($p.InstallDate)" -match '^(\d{4})(\d{2})(\d{2})$') {
-                $date = '{0}-{1}-{2}' -f $Matches[1], $Matches[2], $Matches[3]
-                $dateSort = "$($p.InstallDate)"
+            # yyyyMMdd by convention, but some installers write other formats (or invalid dates)
+            $parsed = [datetime]::MinValue
+            if ([datetime]::TryParseExact("$($p.InstallDate)".Trim(), [string[]]@('yyyyMMdd', 'yyyy-MM-dd', 'M/d/yyyy', 'MM/dd/yyyy'),
+                    [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$parsed)) {
+                $date = $parsed.ToString('yyyy-MM-dd')
+                $dateSort = $parsed.ToString('yyyyMMdd')
             }
             $size = [int64]0
             if ($p.EstimatedSize) { $size = [int64]$p.EstimatedSize * 1KB }

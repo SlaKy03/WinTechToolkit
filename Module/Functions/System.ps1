@@ -10,6 +10,13 @@ function Test-WTPendingReboot {
     $reasons
 }
 
+function Test-WTRebootRequired {
+    # File renames are queued by many installers and can stay there for days: on their own
+    # they are not a reason to restart before working on the PC
+    param([string[]]$Reasons)
+    [bool]@($Reasons | Where-Object { $_ -and $_ -ne 'Pending file renames' }).Count
+}
+
 function Get-WTSecurityState {
     # BitLocker, Secure Boot and TPM without their cmdlets, which are slow.
     # Without privileges the BitLocker and TPM CIM namespaces take seconds just to answer "access denied".
@@ -82,7 +89,8 @@ function Get-WTSystemInfo {
     $up = (Get-Date) - $os.LastBootUpTime
     Add-Line 'Last boot' ('{0:yyyy-MM-dd HH:mm} (up for {1})' -f $os.LastBootUpTime, (Format-WTUptime $up))
     $pending = @(Test-WTPendingReboot)
-    Add-Line 'Restart pending' $(if ($pending.Count) { 'YES - ' + ($pending -join ', ') } else { 'No' })
+    Add-Line 'Restart pending' $(if (Test-WTRebootRequired $pending) { 'YES - ' + ($pending -join ', ') }
+        elseif ($pending.Count) { 'No (only file renames queued by installers)' } else { 'No' })
     # InstalledOn arrives as an "M/d/yyyy" string and is sometimes empty or in odd formats
     $hf = Get-CimInstance Win32_QuickFixEngineering -ErrorAction SilentlyContinue | ForEach-Object {
         $d = [datetime]::MinValue
@@ -151,7 +159,8 @@ function Get-WTSystemSummary {
         Uptime        = Format-WTUptime $up
         UptimeDays    = $up.TotalDays
         LastBoot      = $os.LastBootUpTime.ToString('yyyy-MM-dd HH:mm')
-        PendingReboot = [bool]$pending.Count
+        PendingReboot = Test-WTRebootRequired $pending
+        PendingRenames = $pending -contains 'Pending file renames'
         PendingText   = $pending -join ', '
         DiskFreeText  = Format-WTSize $disk.FreeSpace
         DiskTotalText = Format-WTSize $disk.Size

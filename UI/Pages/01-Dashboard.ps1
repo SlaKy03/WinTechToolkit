@@ -38,7 +38,8 @@ function Update-WTDashboard {
         if (-not $s) { return }
         Set-WTDash 'Pc' $s.Computer "$($s.Model) · S/N $($s.Serial)"
         Set-WTDash 'Os' $s.OS $s.Version
-        $upSub = if ($s.PendingReboot) { "Restart pending ($($s.PendingText))" } else { "Last boot $($s.LastBoot)" }
+        $upSub = if ($s.PendingReboot) { "Restart pending ($($s.PendingText))" }
+        elseif ($s.PendingRenames) { "Last boot $($s.LastBoot) · file renames queued" } else { "Last boot $($s.LastBoot)" }
         Set-WTDash 'Up' $s.Uptime $upSub $(if ($s.PendingReboot -or $s.UptimeDays -ge 14) { 'Warn' })
         $diskLevel = if ($s.DiskUsedPct -ge 90) { 'Err' } elseif ($s.DiskUsedPct -ge 80) { 'Warn' } else { '' }
         Set-WTDash 'Disk' "$($s.DiskFreeText) free" "of $($s.DiskTotalText) · $($s.DiskUsedPct)% used" $diskLevel

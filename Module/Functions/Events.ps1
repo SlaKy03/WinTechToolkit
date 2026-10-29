@@ -356,9 +356,11 @@ function Get-WTProblemReport {
     $R.Add(('=' * 90))
     $R.Add(('Last boot: {0:yyyy-MM-dd HH:mm} - up for {1}' -f $os.LastBootUpTime, (Format-WTUptime $up)))
     $pending = @(Test-WTPendingReboot)
-    if ($pending.Count) {
+    if (Test-WTRebootRequired $pending) {
         $R.Add("Restart pending: $($pending -join ', ')")
         Add-Hint 'A restart is pending (updates or installations): restart before investigating further.'
+    } elseif ($pending.Count) {
+        $R.Add('Restart pending: no (only file renames queued by installers)')
     }
     if ($up.Days -ge 14) { Add-Hint "The PC has been up for $($up.Days) days: a full restart solves many problems and applies updates." }
     $si = Get-WTStabilityIndex

@@ -39,6 +39,20 @@ public static class WTWindowHelper {
         return new Thickness(x, y, x, y);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    struct FLASHWINFO { public int cbSize; public IntPtr hwnd; public uint dwFlags; public uint uCount; public uint dwTimeout; }
+    [DllImport("user32.dll")]
+    static extern bool FlashWindowEx(ref FLASHWINFO info);
+
+    // Flashes the taskbar button until the window comes to the foreground (FLASHW_TRAY | FLASHW_TIMERNOFG)
+    public static void FlashTaskbar(IntPtr hwnd) {
+        FLASHWINFO f = new FLASHWINFO();
+        f.cbSize = Marshal.SizeOf(typeof(FLASHWINFO));
+        f.hwnd = hwnd;
+        f.dwFlags = 0x2 | 0xC;
+        try { FlashWindowEx(ref f); } catch { }
+    }
+
     // DWMWA_BORDER_COLOR (COLORREF 0x00BBGGRR)
     public static void SetBorderColor(IntPtr hwnd, Color color) {
         int value = color.R | (color.G << 8) | (color.B << 16);

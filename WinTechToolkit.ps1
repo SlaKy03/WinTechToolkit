@@ -711,6 +711,7 @@ function Set-WTBusy([bool]$Busy, [string]$Text = '') {
     $ui.PbBusy.Visibility = $(if ($Busy) { 'Visible' } else { 'Collapsed' })
     $ui.BtnStop.Visibility = $ui.PbBusy.Visibility
     $ui.BtnStop.IsEnabled = $true
+    $window.TaskbarItemInfo.ProgressState = $(if ($Busy) { 'Indeterminate' } else { 'None' })
     $ui.TxtStatus.Text = $(if ($Busy) { "Running: $Text" } else { 'Ready' })
 }
 
@@ -798,6 +799,8 @@ function Stop-WTCurrentTask([switch]$Force) {
     }
     $job.Cancelled = $true
     $ui.BtnStop.IsEnabled = $false
+    $window.TaskbarItemInfo.ProgressState = 'Paused'
+    $window.TaskbarItemInfo.ProgressValue = 1
     Write-WTLog "Stopping: $($job.Title)..." -Level Warn
     foreach ($kv in @($global:WTProcesses.GetEnumerator())) {
         if ($kv.Value -ne $job.Id) { continue }
@@ -835,11 +838,14 @@ function Start-WTTask {
 
 function Complete-WTJob($Job) {
     $result = $null
+    $failed = $false
     try { $result = $Job.PS.EndInvoke($Job.Handle) }
-    catch { if (-not $Job.Cancelled) { Write-WTLog "$($Job.Title): $($_.Exception.GetBaseException().Message)" -Level Error } }
+    catch { if (-not $Job.Cancelled) { $failed = $true; Write-WTLog "$($Job.Title): $($_.Exception.GetBaseException().Message)" -Level Error } }
     if (-not $Job.Cancelled) {
+        if ($Job.PS.Streams.Error.Count) { $failed = $true }
         foreach ($e in $Job.PS.Streams.Error) { Write-WTLog "$($Job.Title): $e" -Level $(if ($Job.Background) { 'Warn' } else { 'Error' }) }
     }
+    $Job | Add-Member -NotePropertyName Failed -NotePropertyValue $failed -Force
     $Job.PS.Dispose()
     if ($Job.Cancelled) {
         Write-WTLog ('=== Stopped: {0} (after {1:hh\:mm\:ss}) ===' -f $Job.Title, ((Get-Date) - $Job.Start))
@@ -852,6 +858,64 @@ function Complete-WTJob($Job) {
         try { & $Job.OnComplete $result }
         catch { Write-WTLog "Updating the interface ($($Job.Title)):$($_.Exception.Message)" -Level Error }
     }
+}
+
+function Send-WTCompletionNotice($Job) {
+    # Long operation ended while the technician works elsewhere: taskbar button (red if it
+    # failed) and a Windows notification; clicking it brings the window back
+    $elapsed = (Get-Date) - $Job.Start
+    if ($window.IsActive -or $elapsed.TotalSeconds -lt 15) { return }
+    $outcome = if ($Job.Cancelled) { 'stopped' } elseif ($Job.Failed) { 'finished with errors: see the activity log' } else { 'completed' }
+    if ($Job.Failed) { $window.TaskbarItemInfo.ProgressState = 'Error'; $window.TaskbarItemInfo.ProgressValue = 1 }
+    [WTWindowHelper]::FlashTaskbar($script:Hwnd)
+    Show-WTNotification $Job.Title ('{0} ({1:hh\:mm\:ss})' -f $outcome, $elapsed) -Warning:$Job.Failed
+}
+
+function Show-WTNotification([string]$Title, [string]$Text, [switch]$Warning) {
+    try {
+        if (-not $script:TrayIcon) {
+            Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+            $ni = New-Object System.Windows.Forms.NotifyIcon
+            $ms = New-Object IO.MemoryStream
+            $enc = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+            $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create((New-WTAppIcon 32)))
+            $enc.Save($ms)
+            $ni.Icon = [System.Drawing.Icon]::FromHandle((New-Object System.Drawing.Bitmap $ms).GetHicon())
+            $ni.Text = $app.Name
+            $ni.Add_BalloonTipClicked({ Show-WTWindowFront })
+            $ni.Add_Click({ Show-WTWindowFront })
+            $script:TrayIcon = $ni
+            # the icon only stays in the notification area for a short time
+            $script:TrayTimer = New-Object System.Windows.Threading.DispatcherTimer
+            $script:TrayTimer.Interval = [TimeSpan]::FromSeconds(30)
+            $script:TrayTimer.Add_Tick({ $script:TrayTimer.Stop(); $script:TrayIcon.Visible = $false })
+        }
+        $script:TrayIcon.Visible = $true
+        $script:TrayIcon.ShowBalloonTip(8000, $Title, $Text, $(if ($Warning) { 'Warning' } else { 'Info' }))
+        $script:TrayTimer.Stop(); $script:TrayTimer.Start()
+    } catch { }
+}
+
+function Show-WTWindowFront {
+    if ($window.WindowState -eq 'Minimized') { $window.WindowState = 'Normal' }
+    [void]$window.Activate()
+}
+
+function New-WTAppIcon([int]$Size = 64) {
+    # The logo of the title bar (wrench on a rounded square) as a bitmap: window and tray icon
+    $dv = New-Object System.Windows.Media.DrawingVisual
+    $dc = $dv.RenderOpen()
+    $bg = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Color]::FromRgb(0x88, 0x39, 0xEF))
+    $dc.DrawRoundedRectangle($bg, $null, (New-Object System.Windows.Rect 0, 0, $Size, $Size), ($Size * 0.22), ($Size * 0.22))
+    $ft = New-Object System.Windows.Media.FormattedText ([string][char]0xE90F), ([Globalization.CultureInfo]::InvariantCulture),
+        ([System.Windows.FlowDirection]::LeftToRight), (New-Object System.Windows.Media.Typeface 'Segoe MDL2 Assets'), ($Size * 0.56),
+        ([System.Windows.Media.Brushes]::White), 1.0
+    $dc.DrawText($ft, (New-Object System.Windows.Point (($Size - $ft.Width) / 2), (($Size - $ft.Height) / 2)))
+    $dc.Close()
+    $bmp = New-Object System.Windows.Media.Imaging.RenderTargetBitmap $Size, $Size, 96, 96, ([System.Windows.Media.PixelFormats]::Pbgra32)
+    $bmp.Render($dv)
+    $bmp.Freeze()
+    $bmp
 }
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
@@ -872,6 +936,7 @@ $timer.Add_Tick({
                     $script:CurrentJob = $null
                     Set-WTBusy $false
                     Complete-WTJob $job
+                    Send-WTCompletionNotice $job
                     if (-not $script:CurrentJob -and $script:TaskQueue.Count) { Invoke-WTTaskNow $script:TaskQueue.Dequeue() }
                 }
             }
@@ -959,7 +1024,11 @@ $window.Add_SourceInitialized({
         Update-WTWindowFrame
     })
 # like the system title bar, the title fades when the window is not active
-$window.Add_Activated({ $ui.TitleArea.Opacity = 1; $ui.AppLogo.Opacity = 1 })
+$window.Add_Activated({
+        $ui.TitleArea.Opacity = 1; $ui.AppLogo.Opacity = 1
+        # the red "failed" state stays on the taskbar button until the window is seen
+        if (-not $script:CurrentJob) { $window.TaskbarItemInfo.ProgressState = 'None' }
+    })
 $window.Add_Deactivated({ $ui.TitleArea.Opacity = 0.55; $ui.AppLogo.Opacity = 0.55 })
 
 foreach ($p in $script:Pages) {
@@ -1040,6 +1109,7 @@ $window.Add_Closing({
         Write-WTLog 'Session ended.'
         Update-WTLogView
         $timer.Stop()
+        if ($script:TrayIcon) { $script:TrayIcon.Dispose() }
         Remove-Item -Path (Join-Path $dataDir 'Temp\*') -Recurse -Force -ErrorAction SilentlyContinue
         try { $settings | ConvertTo-Json | Set-Content -LiteralPath $settingsFile -Encoding UTF8 } catch { }
     })
@@ -1067,6 +1137,8 @@ $ui.TxtAboutCopyright.Text = $(try {
         ((Get-Content (Join-Path $PSScriptRoot 'LICENSE') -TotalCount 5 -ErrorAction Stop) -match '^Copyright' | Select-Object -First 1) -replace '^Copyright \(c\)', ([string][char]0xA9)
     } catch { '' })
 Initialize-WTTileRows
+$window.Icon = New-WTAppIcon 64
+$window.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 Set-WTTheme $settings.Theme
 Set-WTLogVisible ([bool]$settings.LogVisible)
 Set-WTSidebar $(if ($null -eq $settings.SidebarExpanded) { $wa.Width -ge 1400 } else { [bool]$settings.SidebarExpanded })

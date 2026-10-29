@@ -41,7 +41,7 @@ $pageXaml = @"
   $(New-PageHeader 'Programs and leftovers' 'Uninstall (also silently) and remove the leftover folders, keys, services, tasks and shortcuts.')
   <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,12,12,6" Margin="0,0,0,10">
     <WrapPanel>
-      <TextBox x:Name="TxtProgFilter" Style="{StaticResource SearchBox}" Width="250" Tag="Search by name or publisher (Ctrl+F)"/>
+      <TextBox x:Name="TxtProgFilter" Style="{StaticResource SearchBox}" Width="290" Tag="Search by name or publisher (Ctrl+F)"/>
       $(New-Pill -Name 'BtnProgRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')
       $(New-Pill -Name 'BtnProgExport' -Glyph '&#xE74E;' -Text 'Export CSV')
       <CheckBox x:Name="ChkSilent" Style="{StaticResource Switch}" Content="Silent" IsChecked="True" Margin="6,0,6,6"
@@ -78,7 +78,7 @@ $pageXaml = @"
         <TextBlock Style="{StaticResource SectionTitle}" Text="Leftovers found" Margin="0,4,14,6" VerticalAlignment="Top"/>
         <WrapPanel>
           <TextBox x:Name="TxtResName" Style="{StaticResource SearchBox}" Width="200" Tag="Manual search: name" ToolTip="For programs that are already uninstalled, e.g. 'Zoom'"/>
-          <TextBox x:Name="TxtResPublisher" Style="{StaticResource SearchBox}" Width="150" Tag="Publisher (optional)"/>
+          <TextBox x:Name="TxtResPublisher" Style="{StaticResource SearchBox}" Width="170" Tag="Publisher (optional)"/>
           $(New-Pill -Name 'BtnResidueManual' -Glyph '&#xE721;' -Text 'Search')
           $(New-Pill -Name 'BtnResidueSelectAll' -Glyph '&#xE762;' -Text 'Select all')
           $(New-Pill -Name 'BtnResidueRemove' -Glyph '&#xE74D;' -Text 'Delete selected leftovers' -Danger)

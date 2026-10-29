@@ -3,7 +3,7 @@
 function Update-WTProfileCount {
     $items = @($ui.GridProfiles.ItemsSource)
     $sum = ($items | Where-Object { $_.SizeBytes -gt 0 } | Measure-Object SizeBytes -Sum).Sum
-    $ui.TxtProfCount.Text = '{0} items · {1} on disk' -f $items.Count, $(if ($sum) { Format-WTSize $sum } else { 'calculating...' })
+    $ui.TxtProfCount.Text = '{0} {1} · {2} on disk' -f $items.Count, $(if ($items.Count -eq 1) { 'item' } else { 'items' }), $(if ($sum) { Format-WTSize $sum } else { 'calculating...' })
 }
 
 function Update-WTProfiles {

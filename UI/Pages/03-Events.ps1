@@ -121,10 +121,10 @@ $pageXaml = @"
       </ContextMenu>
     </DataGrid.ContextMenu>
     <DataGrid.Columns>
-      <DataGridTextColumn Header="Date and time" Binding="{Binding TimeText, Mode=OneWay}" SortMemberPath="Time" Width="140"/>
+      <DataGridTextColumn Header="Date and time" Binding="{Binding TimeText, Mode=OneWay}" SortMemberPath="Time" Width="155"/>
       <DataGridTextColumn Header="Level" Binding="{Binding Level, Mode=OneWay}" Width="75"/>
-      <DataGridTextColumn Header="Category" Binding="{Binding Category, Mode=OneWay}" Width="150"/>
-      <DataGridTextColumn Header="Source" Binding="{Binding Source, Mode=OneWay}" Width="190"/>
+      <DataGridTextColumn Header="Category" Binding="{Binding Category, Mode=OneWay}" Width="175"/>
+      <DataGridTextColumn Header="Source" Binding="{Binding Source, Mode=OneWay}" Width="230"/>
       <DataGridTextColumn Header="ID" Binding="{Binding Id, Mode=OneWay}" Width="58"/>
       <DataGridTextColumn Header="Description" Binding="{Binding Summary, Mode=OneWay}" Width="*"/>
     </DataGrid.Columns>

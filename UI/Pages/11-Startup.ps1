@@ -6,7 +6,7 @@ function Update-WTStartup {
         $rows = @($r | Where-Object { $_ -and $_.PSObject.Properties['ApprovedKey'] })
         $ui.GridStartup.ItemsSource = $rows
         $off = @($rows | Where-Object { -not $_.Enabled }).Count
-        $ui.TxtStartupCount.Text = '{0} items · {1} disabled' -f $rows.Count, $off
+        $ui.TxtStartupCount.Text = '{0} {1} · {2} disabled' -f $rows.Count, $(if ($rows.Count -eq 1) { 'item' } else { 'items' }), $off
     }
 }
 

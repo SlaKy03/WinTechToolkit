@@ -64,7 +64,7 @@ function New-WTHtmlReport {
     if ($SessionLog) {
         # results and operation titles ("=== Start: ...", in the interface language)
         $acts = @($SessionLog | Where-Object { $_ -match '\[(OK|WARN|ERROR)\s*\]|\] === ' })
-        if ($acts.Count) { $sections.Add("<h2>Activities performed in this session</h2><pre>$(& $enc ($acts -join "`n"))</pre>") }
+        if ($acts.Count) { $sections.Add("<h2>Activities performed in this session</h2><div class='muted'>Log lines are in the language of the interface used during the session.</div><pre>$(& $enc ($acts -join "`n"))</pre>") }
     }
     $sections.Add("<h2>Event diagnosis (last $Days days)</h2><pre>$(& $enc $diag.Report)</pre>")
     $sections.Add('<h2>Physical disks</h2>' + (ConvertTo-WTHtmlTable $disks 'Name', 'MediaType', 'SizeText', 'Health', 'Temperature', 'Wear', 'PowerOnHours' 'Disk', 'Type', 'Size', 'Status', 'Temp. °C', 'Wear %', 'Power-on hours'))

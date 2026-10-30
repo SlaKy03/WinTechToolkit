@@ -7,10 +7,15 @@ function Get-WTPrinter {
         Normal = (T 'Ready'); Offline = (T 'Offline'); Error = (T 'Error'); PaperOut = (T 'Out of paper'); PaperJam = (T 'Paper jam')
         Paused = (T 'Paused'); Busy = (T 'Busy'); Printing = (T 'Printing')
     }
+    # In the GUI runspaces the Printer type data is not always applied and PrinterStatus comes
+    # back as the raw code of the enum (0 = Normal...)
+    $codes = @{ 0 = 'Normal'; 1 = 'Paused'; 2 = 'Error'; 4 = 'PaperJam'; 5 = 'PaperOut'; 7 = 'Offline'; 9 = 'Busy'; 10 = 'Printing' }
     foreach ($p in Get-Printer -ErrorAction SilentlyContinue | Sort-Object Name) {
-        $st = $status["$($p.PrinterStatus)"]
-        if (-not $st) { $st = "$($p.PrinterStatus)" }
-        $stText = $statusText["$($p.PrinterStatus)"]
+        $key = "$($p.PrinterStatus)"
+        if ($key -match '^\d+$' -and $codes.ContainsKey([int]$key)) { $key = $codes[[int]$key] }
+        $st = $status[$key]
+        if (-not $st) { $st = $key }
+        $stText = $statusText[$key]
         if (-not $stText) { $stText = $st }
         [pscustomobject]@{
             Name       = $p.Name

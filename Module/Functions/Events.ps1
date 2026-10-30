@@ -459,10 +459,10 @@ function Get-WTProblemReport {
     $dk = @(Get-WTEvents -Category Disk -Days $Days -Quiet)
     Add-Rows $dk
     $bad = @()
-    try { $bad = @(Get-PhysicalDisk -ErrorAction Stop | Where-Object { $_.HealthStatus -ne 'Healthy' }) } catch { }
+    try { $bad = @(Get-PhysicalDisk -ErrorAction Stop | Where-Object { (ConvertTo-WTStorageText $_.HealthStatus $script:WTHealthStates) -ne 'Healthy' }) } catch { }
     if ($dk.Count -or $bad.Count) {
         $R.Add((T '[!] DISK AND FILE SYSTEM: {0} events - sources: {1}' $dk.Count (Get-Top $dk { "$($_.Source) $($_.Id)" } 4)))
-        foreach ($d in $bad) { $R.Add((T '      Disk {0}: status {1}' $d.FriendlyName (Get-WTStateText "$($d.HealthStatus)"))) }
+        foreach ($d in $bad) { $R.Add((T '      Disk {0}: status {1}' $d.FriendlyName (Get-WTStateText (ConvertTo-WTStorageText $d.HealthStatus $script:WTHealthStates)))) }
         Add-Hint (T "Disk errors: check 'Disk health (SMART)' in the Integrity section, run CHKDSK and back up the user's data; with repeated errors consider replacing the disk.")
     } else { $R.Add((T '[OK] No disk errors')) }
 

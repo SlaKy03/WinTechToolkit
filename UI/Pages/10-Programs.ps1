@@ -146,7 +146,7 @@ Register-WTPage -Id 'Programs' -Group 'Software' -Title 'Programs and leftovers'
             DisplayName = $name; Publisher = $ui.TxtResPublisher.Text.Trim(); Version = ''; InstallLocation = ''
             UninstallString = ''; QuietUninstallString = ''; ProductCode = $null; RegistryKey = ''; InstallerType = ''
         }
-        Start-WTTask (T 'Searching for leftovers: {0}' $name) { param($Program) Find-WTProgramResidue -Program $Program } `
+        Start-WTTask (T 'Searching for leftovers: {0}' $name) { param($Program) Find-WTProgramResidue -Program $Program -Partial } `
             -Parameters @{ Program = $pseudo } -OnComplete { param($r) Show-WTResidues $r }
     }
     On 'BtnResidueSelectAll' { $ui.GridResidues.SelectAll() }

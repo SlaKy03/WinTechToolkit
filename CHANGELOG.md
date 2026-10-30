@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fix: `irm ... | iex` failed with "term not recognized" because `start.ps1` had a BOM. The
+  static checks now fail if `start.ps1` has one.
+- Events: the category being shown stays highlighted instead of always "Automatic diagnosis".
+- Programs: the manual leftovers search also lists folders and registry keys whose name
+  contains the text (e.g. "Zoom" finds "ZoomVideoApps"), for programs uninstalled without
+  the toolkit; protected and too generic names are still excluded.
+- Report and diagnosis: healthy disks are no longer reported as a problem with "0 events"
+  and printers show "Ready" instead of the code "0".
+
 ## 0.9.2-beta
 
 - **Italian interface**: the whole interface, messages, confirmations and logs are translated.

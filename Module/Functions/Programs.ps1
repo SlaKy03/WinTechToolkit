@@ -234,8 +234,11 @@ function Find-WTProgramResidue {
     .NOTES
         Folders in use by other installed programs and generic/system names are
         excluded automatically.
+        -Partial (manual search for programs already uninstalled): also lists the
+        first-level folders and registry keys whose name contains the text, e.g. "Zoom"
+        finds "ZoomVideoApps". Used only on request because it can match more than needed.
     #>
-    param([Parameter(Mandatory)]$Program)
+    param([Parameter(Mandatory)]$Program, [switch]$Partial)
     $name = $Program.DisplayName
     Write-WTLog (T 'Searching for leftovers of: {0}' $name)
 
@@ -327,6 +330,38 @@ function Find-WTProgramResidue {
             $children = @(Get-ChildItem -LiteralPath $pd -Force -ErrorAction SilentlyContinue)
             $leftover = @($children | Where-Object { -not $seen.Contains("Folder|$($_.FullName)") })
             if ($leftover.Count -eq 0 -and (Test-FolderCandidate $pd)) { Add-Residue 'Folder' $pd (T 'Publisher folder, empty after cleanup ({0})' $label) }
+        }
+    }
+
+    # --- 2b. Partial match on the name (manual search only) ------------------------------
+    if ($Partial) {
+        $needle = ($name -replace '\s{2,}', ' ').Trim()
+        $needleNs = $needle -replace '\s', ''
+        $cmpP = [StringComparison]::OrdinalIgnoreCase
+        if ($needle.Length -ge 4 -and -not (Test-WTProtectedName $needle)) {
+            foreach ($root in $roots) {
+                if (-not (Test-Path -LiteralPath $root)) { continue }
+                $label = Get-RootLabel $root
+                foreach ($d in Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction SilentlyContinue) {
+                    if ($d.Name.IndexOf($needle, $cmpP) -lt 0 -and $d.Name.IndexOf($needleNs, $cmpP) -lt 0) { continue }
+                    if (Test-WTProtectedName $d.Name) { continue }
+                    if (Test-FolderCandidate $d.FullName) { Add-Residue 'Folder' $d.FullName (T "Name contains '{0}' ({1})" $needle $label) }
+                }
+            }
+            $partialRoots = @('HKEY_LOCAL_MACHINE\SOFTWARE', 'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node')
+            foreach ($h in Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue) {
+                if ($h.PSChildName -match '^S-1-(5-21|12-1)-[\d-]+$') { $partialRoots += "HKEY_USERS\$($h.PSChildName)\Software" }
+            }
+            foreach ($rr in $partialRoots) {
+                foreach ($sub in Get-ChildItem -LiteralPath "Registry::$rr" -ErrorAction SilentlyContinue) {
+                    $sn = $sub.PSChildName
+                    if ($sn.IndexOf($needle, $cmpP) -lt 0 -and $sn.IndexOf($needleNs, $cmpP) -lt 0) { continue }
+                    if (Test-WTProtectedName $sn) { continue }
+                    Add-Residue 'Registry' "$rr\$sn" (T "Key contains '{0}'" $needle)
+                }
+            }
+        } else {
+            Write-WTLog 'Partial search skipped: the name is too short or too generic.' -Level Warn
         }
     }
 
@@ -437,6 +472,7 @@ function Find-WTProgramResidue {
         Write-WTLog (T 'Found {0} leftovers for {1} ({2}). Review them before deleting.' $found.Count $name (Format-WTSize $tot)) -Level Warn
     } else {
         Write-WTLog (T 'No leftovers found for {0}.' $name) -Level OK
+        if (-not $Partial -and -not $Program.RegistryKey) { Write-WTLog 'Nothing matched the exact name. Try a shorter name, or the publisher name.' }
     }
     $found
 }

@@ -33,9 +33,18 @@ function Update-WTEventFilter {
     $ui.TxtEvtCount.Text = T '{0} of {1} events' $rows.Count $script:AllEvents.Count
 }
 
+# The active category is highlighted like a primary button
+function Set-WTActiveEventCategory([string]$Category) {
+    foreach ($k in $script:EventCats.Keys) {
+        $style = if ($k -eq $Category) { 'PillPrimary' } else { 'Pill' }
+        $ui["EvtCat_$k"].Style = $window.FindResource($style)
+    }
+}
+
 function Invoke-WTEventCategory([string]$Category, [switch]$Background) {
     $days = Get-WTEventDays
     $label = $script:EventCats[$Category][1]
+    Set-WTActiveEventCategory $Category
     if ($Category -eq 'Diagnosis') {
         Start-WTTask (T 'Problem diagnosis (last {0} days)' $days) { param($Days) Get-WTProblemReport -Days $Days } -Parameters @{ Days = $days } -Background:$Background -OnComplete {
             param($r)

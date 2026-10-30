@@ -41,8 +41,8 @@ function Get-WTInstalledProgram {
 
             $list.Add([pscustomobject]@{
                     DisplayName          = $p.DisplayName.Trim()
-                    Version              = $p.DisplayVersion
-                    Publisher            = $p.Publisher
+                    Version              = "$($p.DisplayVersion)".Trim()
+                    Publisher            = "$($p.Publisher)".Trim()
                     InstallDate          = $date
                     InstallDateSort      = $dateSort
                     SizeBytes            = $size

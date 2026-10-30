@@ -28,6 +28,7 @@ function Get-WTStartupItem {
         if ($target -and (Test-Path -LiteralPath $target -PathType Leaf)) {
             try { $company = (Get-Item -LiteralPath $target).VersionInfo.CompanyName } catch { }
         }
+        $company = "$company".Trim()
         $items.Add([pscustomobject]@{
                 Name        = $Name
                 Command     = $Command

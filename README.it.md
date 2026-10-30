@@ -2,12 +2,10 @@
 
 [English](README.md) · **Italiano**
 
-> **Beta (0.9.1-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
+> **Beta (0.9.2-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
 > **modalità Simulazione** attiva e [segnala i problemi](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Molte azioni modificano il sistema (eliminano profili, disinstallano programmi, modificano
 > il registro). **Usalo a tuo rischio**, vedi [LICENSE](LICENSE).
->
-> Nota: l'interfaccia del programma è per ora **solo in inglese**. Questo file è la guida in italiano.
 
 Diagnostica, riparazione e manutenzione di Windows 10/11 in un'unica finestra, pensata per chi
 fa assistenza tecnica: help desk, sistemisti, tecnici di laboratorio o chi si occupa dei PC di
@@ -66,13 +64,14 @@ SmartScreen e alcuni antivirus possono segnalarlo. Nel dubbio usa lo zip e leggi
 | | **Printers** | Code e stato, pagina di prova, collegamento di stampanti condivise (per tutti o per un utente), rimozione di stampanti e driver inutilizzati, spooler |
 | | **Remote computer** | Le stesse funzioni su un altro PC via WinRM, senza installare nulla sul PC remoto |
 
-I nomi delle sezioni sono quelli dell'interfaccia (in inglese). Le azioni che riguardano
+I nomi delle sezioni sono quelli dell'interfaccia in inglese; in italiano sono tradotti. Le azioni che riguardano
 l'utente (credenziali, Kerberos, OneDrive, accesso a Office) vengono eseguite **nella sessione
 dell'utente connesso**, anche se il toolkit gira con un altro account amministratore.
 
 ## Interfaccia
 
 - Tema scuro e chiaro (palette Catppuccin Mocha/Latte), menu laterale comprimibile.
+- Interfaccia in **italiano e inglese**: segue la lingua di Windows e si cambia dalla barra del titolo (il toolkit si riavvia).
 - I dati delle sezioni vengono caricati in background all'avvio: aprendo una sezione sono già pronti.
 - Le operazioni lunghe non bloccano la finestra; se ne avvii una mentre un'altra è in corso, viene messa in coda.
 - **Modalità simulazione** (interruttore *Simulation*): le operazioni che modificano il sistema vengono solo descritte nel registro attività.
@@ -118,7 +117,7 @@ Elenco completo: `Get-Command -Module WinTechToolkit`.
 - Gli uninstaller EXE senza switch silenzioso riconosciuto si avviano in modalità interattiva.
 - `gpupdate` applica i criteri utente all'account che esegue il toolkit.
 - L'exe non è firmato (vedi "Sulla fiducia").
-- L'interfaccia è solo in inglese, per ora.
+- Il report per il ticket è solo in inglese.
 
 Per struttura del progetto, build e pubblicazione delle release vedi il [README in inglese](README.md).
 

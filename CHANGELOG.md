@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.9.2-beta
 
+- **Italian interface**: the whole interface, messages, confirmations and logs are translated.
+  The language follows Windows by default and can be changed from the title bar (the toolkit
+  restarts to apply it). The ticket report stays in English. Other languages can be added
+  with a new `Module\Lang\<code>.psd1` file.
+- The static checks fail on missing translations, different placeholders and untranslated
+  XAML texts.
+- Size columns are wider so the Italian text is not cut.
 - Search and text boxes: the caret no longer starts in the middle of the placeholder and the
   typed text sits next to the search icon; placeholders are fainter so they don't look typed.
 - Unexpected errors in the interface no longer close the window: they are written to

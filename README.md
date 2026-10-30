@@ -2,7 +2,7 @@
 
 **English** · [Italiano](README.it.md)
 
-> **Beta (0.9.1-beta).** It works and has been tested, but it is not finished: please try it
+> **Beta (0.9.2-beta).** It works and has been tested, but it is not finished: please try it
 > first with **Simulation mode** on, and [report problems](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Many of the actions change the system (delete profiles, uninstall programs, edit the
 > registry). **Use at your own risk**, see [LICENSE](LICENSE).
@@ -84,7 +84,9 @@ administrator account.
 | `Ctrl+F` | Search (Programs, Events) |
 | `Ctrl+L` | Show/hide the activity log |
 
-The interface is currently **English only**. More languages are planned; contributions are welcome.
+The interface is available in **English and Italian**: it follows the Windows language and can be
+changed from the title bar (the toolkit restarts). To add a language, copy `Module\Lang\it.psd1`
+to `Module\Lang\<code>.psd1` and translate it; contributions are welcome.
 
 ## Safety
 
@@ -122,6 +124,7 @@ app.json                  name, version and repository (used by the interface, e
 UI\Styles.ps1             palette and styles
 UI\Pages\*.ps1            one section per file (XAML, loading, handlers)
 Module\Functions\*.ps1    module functions, split by topic
+Module\Lang\*.psd1        interface translations (English is the source text)
 Build\Build.ps1           creates dist\WinTechToolkit.zip/.exe and their .sha256 files
 Build\Launcher.cs         source of the .exe launcher
 Build\Test-*.ps1          static checks and a UI run with screenshots
@@ -134,7 +137,7 @@ non-ASCII characters): `Build\Test-Toolkit.ps1 -FixBom` fixes it.
 ## Publishing a release
 
 1. Update `Version` in `app.json` and `CHANGELOG.md`.
-2. `git tag v0.9.0-beta && git push --tags`: GitHub Actions runs the checks, builds, and
+2. `git tag v0.9.2-beta && git push --tags`: GitHub Actions runs the checks, builds, and
    publishes the release with `WinTechToolkit.zip`, `WinTechToolkit.exe` and their `.sha256` files.
 
 Do **not** mark the release as a GitHub "pre-release": `releases/latest`, which the
@@ -149,7 +152,7 @@ Manual build: `powershell -ExecutionPolicy Bypass -File .\Build\Build.ps1`.
 - EXE uninstallers without a recognized silent switch start in interactive mode.
 - `gpupdate` applies user policies to the account running the toolkit.
 - The exe is not code-signed (see "About trust").
-- English only for now.
+- The ticket report is in English only.
 
 ## License
 

@@ -21,12 +21,12 @@ jobs:
           $out
           if ($out -match 'Syntax errors: [1-9]|missing BOM|must NOT have a BOM|Missing controls|Undefined functions|Missing translations \(|Different placeholders \(|Untranslated XAML texts:') { exit 1 }
 
-                - name: Safety checks
-                  shell: powershell
-                  run: |
-                    $out = & .\Build\Test-Safety.ps1
-                    $out | Select-Object -Last 15
-                    if ($out -match '^FAIL') { exit 1 }
+      - name: Safety checks
+        shell: powershell
+        run: |
+          $out = & .\Build\Test-Safety.ps1
+          $out | Select-Object -Last 15
+          if ($out -match '^FAIL') { exit 1 }
 
       - name: Build
         shell: powershell

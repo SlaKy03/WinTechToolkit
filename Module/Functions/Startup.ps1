@@ -35,20 +35,20 @@ function Get-WTStartupItem {
                 Publisher   = $company
                 Location    = $Location
                 Enabled     = $enabled
-                EnabledText = $(if ($ApprovedKey) { Format-WTBool $enabled } else { 'n/a' })
+                EnabledText = $(if ($ApprovedKey) { Format-WTBool $enabled } else { T 'n/a' })
                 ApprovedKey = $ApprovedKey
             })
     }
 
     $sources = @(
-        @{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'; Label = 'Registry (all users)'; Approved = "HKEY_LOCAL_MACHINE\$approvedBase\Run" },
-        @{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'; Label = 'Registry 32-bit (all users)'; Approved = "HKEY_LOCAL_MACHINE\$approvedBase\Run32" }
+        @{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'; Label = (T 'Registry (all users)'); Approved = "HKEY_LOCAL_MACHINE\$approvedBase\Run" },
+        @{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run'; Label = (T 'Registry 32-bit (all users)'); Approved = "HKEY_LOCAL_MACHINE\$approvedBase\Run32" }
     )
     foreach ($h in Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue) {
         if ($h.PSChildName -notmatch '^S-1-(5-21|12-1)-[\d-]+$') { continue }
         $n = Resolve-WTSidName $h.PSChildName
         if (-not $n) { $n = $h.PSChildName }
-        $sources += @{ Key = "HKEY_USERS\$($h.PSChildName)\Software\Microsoft\Windows\CurrentVersion\Run"; Label = "Registry ($n)"; Approved = "HKEY_USERS\$($h.PSChildName)\$approvedBase\Run" }
+        $sources += @{ Key = "HKEY_USERS\$($h.PSChildName)\Software\Microsoft\Windows\CurrentVersion\Run"; Label = (T 'Registry ({0})' $n); Approved = "HKEY_USERS\$($h.PSChildName)\$approvedBase\Run" }
     }
     foreach ($s in $sources) {
         $item = Get-Item -LiteralPath "Registry::$($s.Key)" -ErrorAction SilentlyContinue
@@ -62,7 +62,7 @@ function Get-WTStartupItem {
     # Startup folders
     $common = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
     foreach ($f in Get-ChildItem -LiteralPath $common -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' }) {
-        Add-Item $f.Name $f.FullName 'Startup folder (all users)' "HKEY_LOCAL_MACHINE\$approvedBase\StartupFolder"
+        Add-Item $f.Name $f.FullName (T 'Startup folder (all users)') "HKEY_LOCAL_MACHINE\$approvedBase\StartupFolder"
     }
     foreach ($key in Get-ChildItem $script:WTProfileListKey -ErrorAction SilentlyContinue) {
         $sid = $key.PSChildName
@@ -72,7 +72,7 @@ function Get-WTStartupItem {
         $dir = Join-Path ([Environment]::ExpandEnvironmentVariables($ip)) 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
         $approved = if (Test-Path "Registry::HKEY_USERS\$sid") { "HKEY_USERS\$sid\$approvedBase\StartupFolder" } else { $null }
         foreach ($f in Get-ChildItem -LiteralPath $dir -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' }) {
-            Add-Item $f.Name $f.FullName "Startup folder ($(Split-Path $ip -Leaf))" $approved
+            Add-Item $f.Name $f.FullName (T 'Startup folder ({0})' (Split-Path $ip -Leaf)) $approved
         }
     }
     $items | Sort-Object Location, Name
@@ -82,21 +82,23 @@ function Set-WTStartupItem {
     # Enables or disables like Task Manager (byte 02 = enabled, 03 + date = disabled)
     param([Parameter(Mandatory)][object[]]$InputObject, [Parameter(Mandatory)][bool]$Enabled, [switch]$Simulate)
     foreach ($i in $InputObject) {
-        if (-not $i.ApprovedKey) { Write-WTLog "$($i.Name): profile not loaded, cannot be changed now." -Level Warn; continue }
-        $verb = if ($Enabled) { 'Would enable' } else { 'Would disable' }
-        if ($Simulate) { Write-WTLog "[SIMULATION] $verb $($i.Name)"; continue }
+        if (-not $i.ApprovedKey) { Write-WTLog (T '{0}: profile not loaded, cannot be changed now.' $i.Name) -Level Warn; continue }
+        if ($Simulate) {
+            if ($Enabled) { Write-WTLog (T '[SIMULATION] Would enable {0}' $i.Name) } else { Write-WTLog (T '[SIMULATION] Would disable {0}' $i.Name) }
+            continue
+        }
         $path = "Registry::$($i.ApprovedKey)"
         if (-not (Test-Path -LiteralPath $path)) { New-Item -Path $path -Force | Out-Null }
         if ($Enabled) { $bytes = [byte[]](2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) }
         else { $bytes = [byte[]](3, 0, 0, 0) + [BitConverter]::GetBytes((Get-Date).ToFileTime()) }
         New-ItemProperty -LiteralPath $path -Name $i.Name -Value $bytes -PropertyType Binary -Force | Out-Null
-        Write-WTLog ('{0} {1}' -f $i.Name, $(if ($Enabled) { 'enabled' } else { 'disabled' })) -Level OK
+        if ($Enabled) { Write-WTLog (T '{0} enabled' $i.Name) -Level OK } else { Write-WTLog (T '{0} disabled' $i.Name) -Level OK }
     }
 }
 
 function Get-WTScheduledTaskList {
     param([switch]$IncludeMicrosoft)
-    $states = @{ Ready = 'Ready'; Disabled = 'Disabled'; Running = 'Running'; Queued = 'Queued' }
+    $states = @{ Ready = (T 'Ready'); Disabled = (T 'Disabled'); Running = (T 'Running'); Queued = (T 'Queued') }
     $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
         ($IncludeMicrosoft -or $_.TaskPath -notlike '\Microsoft\*') -and $_.TaskPath -ne '\WinTechToolkit\'
     }
@@ -123,11 +125,15 @@ function Get-WTScheduledTaskList {
 function Set-WTScheduledTaskState {
     param([Parameter(Mandatory)][object[]]$InputObject, [Parameter(Mandatory)][bool]$Enabled, [switch]$Simulate)
     foreach ($t in $InputObject) {
-        if ($Simulate) { Write-WTLog ("[SIMULATION] {0} task {1}{2}" -f $(if ($Enabled) { 'Would enable' } else { 'Would disable' }), $t.Path, $t.Name); continue }
+        $full = "$($t.Path)$($t.Name)"
+        if ($Simulate) {
+            if ($Enabled) { Write-WTLog (T '[SIMULATION] Would enable task {0}' $full) } else { Write-WTLog (T '[SIMULATION] Would disable task {0}' $full) }
+            continue
+        }
         try {
             if ($Enabled) { Enable-ScheduledTask -TaskPath $t.Path -TaskName $t.Name -ErrorAction Stop | Out-Null }
             else { Disable-ScheduledTask -TaskPath $t.Path -TaskName $t.Name -ErrorAction Stop | Out-Null }
-            Write-WTLog ('Task {0}{1} {2}' -f $t.Path, $t.Name, $(if ($Enabled) { 'enabled' } else { 'disabled' })) -Level OK
-        } catch { Write-WTLog "Could not change $($t.Name): $($_.Exception.Message)" -Level Error }
+            if ($Enabled) { Write-WTLog (T 'Task {0} enabled' $full) -Level OK } else { Write-WTLog (T 'Task {0} disabled' $full) -Level OK }
+        } catch { Write-WTLog (T 'Could not change {0}: {1}' $t.Name $_.Exception.Message) -Level Error }
     }
 }

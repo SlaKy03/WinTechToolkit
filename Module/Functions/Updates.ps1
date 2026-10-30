@@ -5,21 +5,24 @@ function Get-WTUpdateHistory {
     $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
     $total = $searcher.GetTotalHistoryCount()
     if (-not $total) { Write-WTLog 'Update history is empty.'; return }
+    # Result: code used by the checks and the row colours, ResultText: shown in the table
     $results = @{ 0 = 'Not started'; 1 = 'In progress'; 2 = 'Succeeded'; 3 = 'Succeeded with errors'; 4 = 'Failed'; 5 = 'Aborted' }
+    $resultText = @{ 0 = (T 'Not started'); 1 = (T 'In progress'); 2 = (T 'Succeeded'); 3 = (T 'Succeeded with errors'); 4 = (T 'Failed'); 5 = (T 'Aborted') }
     $rows = foreach ($h in $searcher.QueryHistory(0, [Math]::Min($total, $Max))) {
         if (-not $h.Title) { continue }
         $date = [DateTime]::SpecifyKind($h.Date, 'Utc').ToLocalTime()
         [pscustomobject]@{
-            Time     = $date
-            TimeText = $date.ToString('yyyy-MM-dd HH:mm')
-            Title    = $h.Title
-            KB       = $(if ($h.Title -match '(KB\d+)') { $Matches[1] } else { '' })
-            Result   = $results[[int]$h.ResultCode]
-            Code     = $(if ($h.HResult) { '0x{0:X8}' -f $h.HResult } else { '' })
+            Time       = $date
+            TimeText   = $date.ToString('yyyy-MM-dd HH:mm')
+            Title      = $h.Title
+            KB         = $(if ($h.Title -match '(KB\d+)') { $Matches[1] } else { '' })
+            Result     = $results[[int]$h.ResultCode]
+            ResultText = $resultText[[int]$h.ResultCode]
+            Code       = $(if ($h.HResult) { '0x{0:X8}' -f $h.HResult } else { '' })
         }
     }
     $failed = @($rows | Where-Object { $_.Result -eq 'Failed' }).Count
-    Write-WTLog "History: $(@($rows).Count) entries, $failed failed." -Level $(if ($failed) { 'Warn' } else { 'OK' })
+    Write-WTLog (T 'History: {0} entries, {1} failed.' (@($rows).Count) $failed) -Level $(if ($failed) { 'Warn' } else { 'OK' })
     $rows
 }
 
@@ -41,9 +44,10 @@ function Find-WTUpdate {
     param([switch]$Online, [switch]$IncludeDrivers)
     $s = New-WTUpdateSearcher -Online:$Online
     $criteria = if ($IncludeDrivers) { 'IsInstalled=0 and IsHidden=0' } else { "IsInstalled=0 and IsHidden=0 and Type='Software'" }
-    Write-WTLog "Searching for updates on $(if ($Online) { 'Windows Update' } else { 'the configured server (WSUS or Windows Update)' })..."
+    if ($Online) { Write-WTLog 'Searching for updates on Windows Update...' }
+    else { Write-WTLog 'Searching for updates on the configured server (WSUS or Windows Update)...' }
     try { $result = $s.Searcher.Search($criteria) }
-    catch { Write-WTLog "Search failed: $($_.Exception.Message)" -Level Error; return }
+    catch { Write-WTLog (T 'Search failed: {0}' $_.Exception.Message) -Level Error; return }
     $rows = foreach ($u in $result.Updates) {
         [pscustomobject]@{
             Id         = $u.Identity.UpdateID
@@ -57,7 +61,7 @@ function Find-WTUpdate {
             Downloaded = Format-WTBool $u.IsDownloaded
         }
     }
-    Write-WTLog "Updates available: $(@($rows).Count)" -Level $(if (@($rows).Count) { 'Warn' } else { 'OK' })
+    Write-WTLog (T 'Updates available: {0}' (@($rows).Count)) -Level $(if (@($rows).Count) { 'Warn' } else { 'OK' })
     $rows
 }
 
@@ -76,15 +80,15 @@ function Install-WTUpdate {
     }
     if ($coll.Count -eq 0) { Write-WTLog 'No updates to install.' -Level OK; return }
     if ($Simulate) {
-        foreach ($u in $coll) { Write-WTLog "[SIMULATION] Would install: $($u.Title)" }
+        foreach ($u in $coll) { Write-WTLog (T '[SIMULATION] Would install: {0}' $u.Title) }
         return
     }
 
-    Write-WTLog "Downloading $($coll.Count) updates..."
+    Write-WTLog (T 'Downloading {0} updates...' $coll.Count)
     $dl = $s.Session.CreateUpdateDownloader()
     $dl.Updates = $coll
     $dr = $dl.Download()
-    Write-WTLog "Download finished (code $($dr.ResultCode))."
+    Write-WTLog (T 'Download finished (code {0}).' $dr.ResultCode)
 
     Write-WTLog 'Installing: this can take several minutes.'
     $inst = $s.Session.CreateUpdateInstaller()
@@ -93,7 +97,7 @@ function Install-WTUpdate {
     for ($i = 0; $i -lt $coll.Count; $i++) {
         $r = $ir.GetUpdateResult($i)
         $ok = $r.ResultCode -eq 2 -or $r.ResultCode -eq 3
-        $msg = '{0}: {1}' -f $coll.Item($i).Title, $(if ($ok) { 'installed' } else { 'NOT installed (0x{0:X8})' -f $r.HResult })
+        $msg = '{0}: {1}' -f $coll.Item($i).Title, $(if ($ok) { T 'installed' } else { T 'NOT installed (0x{0:X8})' $r.HResult })
         Write-WTLog $msg -Level $(if ($ok) { 'OK' } else { 'Error' })
     }
     if ($ir.RebootRequired) { Write-WTLog 'A restart is required to complete the updates.' -Level Warn }

@@ -6,7 +6,7 @@ function Update-WTStartup {
         $rows = @($r | Where-Object { $_ -and $_.PSObject.Properties['ApprovedKey'] })
         $ui.GridStartup.ItemsSource = $rows
         $off = @($rows | Where-Object { -not $_.Enabled }).Count
-        $ui.TxtStartupCount.Text = '{0} {1} · {2} disabled' -f $rows.Count, $(if ($rows.Count -eq 1) { 'item' } else { 'items' }), $off
+        $ui.TxtStartupCount.Text = if ($rows.Count -eq 1) { T '1 item · {0} disabled' $off } else { T '{0} items · {1} disabled' $rows.Count $off }
     }
 }
 
@@ -15,14 +15,14 @@ function Update-WTTasks {
         param($r)
         $rows = @($r | Where-Object { $_ -and $_.PSObject.Properties['RunAs'] })
         $ui.GridTasks.ItemsSource = $rows
-        $ui.TxtTasksCount.Text = "$($rows.Count) tasks"
+        $ui.TxtTasksCount.Text = T '{0} tasks' $rows.Count
     }
 }
 
 function Set-WTStartupSelection([bool]$Enabled) {
     $sel = @($ui.GridStartup.SelectedItems)
     if (-not $sel.Count) { Show-WTInfo 'Select one or more items.'; return }
-    Start-WTTask $(if ($Enabled) { 'Enable at startup' } else { 'Disable at startup' }) {
+    Start-WTTask $(if ($Enabled) { T 'Enable at startup' } else { T 'Disable at startup' }) {
         param($Items, $Enabled, $Simulate) Set-WTStartupItem -InputObject $Items -Enabled $Enabled -Simulate:$Simulate
     } -Parameters @{ Items = $sel; Enabled = $Enabled; Simulate = Get-WTSimulate } -OnComplete { Update-WTStartup }
 }
@@ -32,7 +32,7 @@ function Set-WTTaskSelection([bool]$Enabled) {
     if (-not $sel.Count) { Show-WTInfo 'Select one or more tasks.'; return }
     if (-not $Enabled -and @($sel | Where-Object { $_.Path -like '\Microsoft\*' }).Count -and
         -not (Show-WTConfirm 'The selected tasks include Windows tasks: disabling them can prevent maintenance and updates. Continue?')) { return }
-    Start-WTTask $(if ($Enabled) { 'Enable tasks' } else { 'Disable tasks' }) {
+    Start-WTTask $(if ($Enabled) { T 'Enable tasks' } else { T 'Disable tasks' }) {
         param($Items, $Enabled, $Simulate) Set-WTScheduledTaskState -InputObject $Items -Enabled $Enabled -Simulate:$Simulate
     } -Parameters @{ Items = $sel; Enabled = $Enabled; Simulate = Get-WTSimulate } -OnComplete { Update-WTTasks }
 }
@@ -49,13 +49,13 @@ $pageXaml = @"
   <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0" Padding="12">
     <DockPanel>
       <DockPanel DockPanel.Dock="Top">
-        <TextBlock Style="{StaticResource SectionTitle}" Text="Startup programs" Margin="0,4,14,6" VerticalAlignment="Top"/>
+        <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Startup programs')" Margin="0,4,14,6" VerticalAlignment="Top"/>
         <WrapPanel>
           $(New-Pill -Name 'BtnStartupDisable' -Glyph '&#xE711;' -Text 'Disable')
           $(New-Pill -Name 'BtnStartupEnable' -Glyph '&#xE73E;' -Text 'Enable')
           $(New-Pill -Name 'BtnStartupRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')
           $(New-Pill -Name 'BtnStartupTaskmgr' -Glyph '&#xE9D9;' -Text 'Task Manager')
-          <TextBlock x:Name="TxtStartupCount" Style="{StaticResource Counter}" Text="Loading..."/>
+          <TextBlock x:Name="TxtStartupCount" Style="{StaticResource Counter}" Text="$(TX 'Loading...')"/>
         </WrapPanel>
       </DockPanel>
       <DataGrid x:Name="GridStartup" Margin="0,4,0,0">
@@ -68,17 +68,17 @@ $pageXaml = @"
         </DataGrid.RowStyle>
         <DataGrid.ContextMenu>
           <ContextMenu>
-            <MenuItem x:Name="CmStartupOpen" Header="Open file location"/>
-            <MenuItem x:Name="CmStartupCopy" Header="Copy command"/>
-            <MenuItem x:Name="CmStartupWeb" Header="Search the web"/>
+            <MenuItem x:Name="CmStartupOpen" Header="$(TX 'Open file location')"/>
+            <MenuItem x:Name="CmStartupCopy" Header="$(TX 'Copy command')"/>
+            <MenuItem x:Name="CmStartupWeb" Header="$(TX 'Search the web')"/>
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>
-          <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="*"/>
-          <DataGridTextColumn Header="Enabled" Binding="{Binding EnabledText, Mode=OneWay}" Width="75"/>
-          <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher, Mode=OneWay}" Width="*"/>
-          <DataGridTextColumn Header="Source" Binding="{Binding Location, Mode=OneWay}" Width="*"/>
-          <DataGridTextColumn Header="Command" Binding="{Binding Command, Mode=OneWay}" Width="2*"/>
+          <DataGridTextColumn Header="$(TX 'Name')" Binding="{Binding Name, Mode=OneWay}" Width="*"/>
+          <DataGridTextColumn Header="$(TX 'Enabled')" Binding="{Binding EnabledText, Mode=OneWay}" Width="75"/>
+          <DataGridTextColumn Header="$(TX 'Publisher')" Binding="{Binding Publisher, Mode=OneWay}" Width="*"/>
+          <DataGridTextColumn Header="$(TX 'Source')" Binding="{Binding Location, Mode=OneWay}" Width="*"/>
+          <DataGridTextColumn Header="$(TX 'Command')" Binding="{Binding Command, Mode=OneWay}" Width="2*"/>
         </DataGrid.Columns>
       </DataGrid>
     </DockPanel>
@@ -87,14 +87,14 @@ $pageXaml = @"
   <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0" Padding="12">
     <DockPanel>
       <DockPanel DockPanel.Dock="Top">
-        <TextBlock Style="{StaticResource SectionTitle}" Text="Scheduled tasks" Margin="0,4,14,6" VerticalAlignment="Top"/>
+        <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Scheduled tasks')" Margin="0,4,14,6" VerticalAlignment="Top"/>
         <WrapPanel>
           $(New-Pill -Name 'BtnTaskDisable' -Glyph '&#xE711;' -Text 'Disable')
           $(New-Pill -Name 'BtnTaskEnable' -Glyph '&#xE73E;' -Text 'Enable')
           $(New-Pill -Name 'BtnTaskRefresh' -Glyph '&#xE72C;' -Text 'Refresh')
-          <CheckBox x:Name="ChkTasksMs" Style="{StaticResource Switch}" Content="Include Windows tasks" Margin="6,0,10,6"/>
+          <CheckBox x:Name="ChkTasksMs" Style="{StaticResource Switch}" Content="$(TX 'Include Windows tasks')" Margin="6,0,10,6"/>
           $(New-Pill -Name 'BtnTaskSchd' -Glyph '&#xE823;' -Text 'Task Scheduler')
-          <TextBlock x:Name="TxtTasksCount" Style="{StaticResource Counter}" Text="Loading..."/>
+          <TextBlock x:Name="TxtTasksCount" Style="{StaticResource Counter}" Text="$(TX 'Loading...')"/>
         </WrapPanel>
       </DockPanel>
       <DataGrid x:Name="GridTasks" Margin="0,4,0,0">
@@ -107,17 +107,17 @@ $pageXaml = @"
         </DataGrid.RowStyle>
         <DataGrid.ContextMenu>
           <ContextMenu>
-            <MenuItem x:Name="CmTaskCopy" Header="Copy action"/>
+            <MenuItem x:Name="CmTaskCopy" Header="$(TX 'Copy action')"/>
           </ContextMenu>
         </DataGrid.ContextMenu>
         <DataGrid.Columns>
-          <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="*"/>
-          <DataGridTextColumn Header="State" Binding="{Binding State, Mode=OneWay}" Width="100"/>
-          <DataGridTextColumn Header="Folder" Binding="{Binding Path, Mode=OneWay}" Width="120"/>
-          <DataGridTextColumn Header="Account" Binding="{Binding RunAs, Mode=OneWay}" Width="110"/>
-          <DataGridTextColumn Header="Last run" Binding="{Binding LastRun, Mode=OneWay}" Width="125"/>
-          <DataGridTextColumn Header="Result" Binding="{Binding LastResult, Mode=OneWay}" Width="85"/>
-          <DataGridTextColumn Header="Action" Binding="{Binding Action, Mode=OneWay}" Width="2*"/>
+          <DataGridTextColumn Header="$(TX 'Name')" Binding="{Binding Name, Mode=OneWay}" Width="*"/>
+          <DataGridTextColumn Header="$(TX 'State')" Binding="{Binding State, Mode=OneWay}" Width="100"/>
+          <DataGridTextColumn Header="$(TX 'Folder')" Binding="{Binding Path, Mode=OneWay}" Width="120"/>
+          <DataGridTextColumn Header="$(TX 'Account')" Binding="{Binding RunAs, Mode=OneWay}" Width="110"/>
+          <DataGridTextColumn Header="$(TX 'Last run')" Binding="{Binding LastRun, Mode=OneWay}" Width="125"/>
+          <DataGridTextColumn Header="$(TX 'Result')" Binding="{Binding LastResult, Mode=OneWay}" Width="85"/>
+          <DataGridTextColumn Header="$(TX 'Action')" Binding="{Binding Action, Mode=OneWay}" Width="2*"/>
         </DataGrid.Columns>
       </DataGrid>
     </DockPanel>
@@ -138,7 +138,7 @@ Register-WTPage -Id 'Startup' -Group 'Software' -Title 'Startup and tasks' -Glyp
     On 'BtnTaskSchd' { Start-Process taskschd.msc }
     On 'CmStartupOpen' {
         $it = $ui.GridStartup.SelectedItem
-        if ($it -and $it.Target) { Open-WTPath $it.Target } elseif ($it) { Show-WTInfo "File not found for: $($it.Command)" }
+        if ($it -and $it.Target) { Open-WTPath $it.Target } elseif ($it) { Show-WTInfo (T 'File not found for: {0}' $it.Command) }
     }
     On 'CmStartupCopy' { if ($ui.GridStartup.SelectedItem) { Set-WTClipboard $ui.GridStartup.SelectedItem.Command } }
     On 'CmStartupWeb' {

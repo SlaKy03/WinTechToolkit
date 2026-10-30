@@ -3,7 +3,8 @@
 function Update-WTProfileCount {
     $items = @($ui.GridProfiles.ItemsSource)
     $sum = ($items | Where-Object { $_.SizeBytes -gt 0 } | Measure-Object SizeBytes -Sum).Sum
-    $ui.TxtProfCount.Text = '{0} {1} · {2} on disk' -f $items.Count, $(if ($items.Count -eq 1) { 'item' } else { 'items' }), $(if ($sum) { Format-WTSize $sum } else { 'calculating...' })
+    $size = if ($sum) { Format-WTSize $sum } else { T 'calculating...' }
+    $ui.TxtProfCount.Text = if ($items.Count -eq 1) { T '1 item · {0} on disk' $size } else { T '{0} items · {1} on disk' $items.Count $size }
 }
 
 function Update-WTProfiles {
@@ -13,7 +14,7 @@ function Update-WTProfiles {
         $items = @($r | Where-Object { $_ -and $_.PSObject.Properties['SID'] })
         $ui.GridProfiles.ItemsSource = $items
         Update-WTProfileCount
-        $paths = @($items | Where-Object { $_.Path -and $_.Status -ne 'Folder missing' } | ForEach-Object { $_.Path } | Select-Object -Unique)
+        $paths = @($items | Where-Object { $_.Path -and $_.Status -ne (T 'Folder missing') } | ForEach-Object { $_.Path } | Select-Object -Unique)
         if (-not $paths.Count) { return }
         Start-WTTask 'Profile sizes' {
             param($Paths)
@@ -45,18 +46,18 @@ $pageXaml = @"
         $(New-Pill -Name 'BtnProfRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')
         $(New-Pill -Name 'BtnProfDelete' -Glyph '&#xE74D;' -Text 'Delete selected' -Danger)
         $(New-Pill -Name 'BtnProfRepairTemp' -Glyph '&#xE90F;' -Text 'Repair TEMP profile (.bak)')
-        <TextBlock x:Name="TxtProfCount" Style="{StaticResource Counter}" Text="Loading..."/>
+        <TextBlock x:Name="TxtProfCount" Style="{StaticResource Counter}" Text="$(TX 'Loading...')"/>
       </WrapPanel>
       <WrapPanel>
-        <TextBlock Style="{StaticResource Label}" Text="Select the profiles unused for at least"/>
+        <TextBlock Style="{StaticResource Label}" Text="$(TX 'Select the profiles unused for at least')"/>
         <TextBox x:Name="TxtProfDays" Width="56" Text="90" HorizontalContentAlignment="Center"/>
-        <TextBlock Style="{StaticResource Label}" Text="days, excluding:"/>
-        <TextBox x:Name="TxtProfExclude" Width="260" Text="Administrator, admin*" ToolTip="Comma-separated names, * as wildcard"/>
+        <TextBlock Style="{StaticResource Label}" Text="$(TX 'days, excluding:')"/>
+        <TextBox x:Name="TxtProfExclude" Width="260" Text="Administrator, admin*" ToolTip="$(TX 'Comma-separated names, * as wildcard')"/>
         $(New-Pill -Name 'BtnProfSelectOld' -Glyph '&#xE762;' -Text 'Select')
       </WrapPanel>
     </StackPanel>
   </Border>
-  <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Hint}" Text="Deletion: WMI profile + folder + ProfileList/.bak keys, ProfileGuid, Group Policy and Appx keys of the SID (automatic .reg backup). Loaded profiles, system profiles and the account in use are protected (greyed out). Right-click for more actions."/>
+  <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Hint}" Text="$(TX 'Deletion: WMI profile + folder + ProfileList/.bak keys, ProfileGuid, Group Policy and Appx keys of the SID (automatic .reg backup). Loaded profiles, system profiles and the account in use are protected (greyed out). Right-click for more actions.')"/>
   <DataGrid x:Name="GridProfiles">
     <DataGrid.RowStyle>
       <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
@@ -69,21 +70,21 @@ $pageXaml = @"
     </DataGrid.RowStyle>
     <DataGrid.ContextMenu>
       <ContextMenu>
-        <MenuItem x:Name="CmProfOpen" Header="Open folder"/>
-        <MenuItem x:Name="CmProfCopyPath" Header="Copy path"/>
-        <MenuItem x:Name="CmProfCopySid" Header="Copy SID"/>
+        <MenuItem x:Name="CmProfOpen" Header="$(TX 'Open folder')"/>
+        <MenuItem x:Name="CmProfCopyPath" Header="$(TX 'Copy path')"/>
+        <MenuItem x:Name="CmProfCopySid" Header="$(TX 'Copy SID')"/>
       </ContextMenu>
     </DataGrid.ContextMenu>
     <DataGrid.Columns>
-      <DataGridTextColumn Header="Type" Binding="{Binding Type, Mode=OneWay}" Width="110"/>
-      <DataGridTextColumn Header="User" Binding="{Binding UserName, Mode=OneWay}" Width="200"/>
-      <DataGridTextColumn Header="Last use" Binding="{Binding LastUseText, Mode=OneWay}" SortMemberPath="LastUse" Width="125"/>
-      <DataGridTextColumn Header="Days" Binding="{Binding DaysUnused, Mode=OneWay}" Width="62"/>
-      <DataGridTextColumn Header="Size" Binding="{Binding SizeText, Mode=OneWay}" SortMemberPath="SizeBytes" Width="95"/>
-      <DataGridTextColumn Header="Loaded" Binding="{Binding LoadedText, Mode=OneWay}" Width="70"/>
-      <DataGridTextColumn Header="Status" Binding="{Binding Status, Mode=OneWay}" Width="190"/>
-      <DataGridTextColumn Header="Path" Binding="{Binding Path, Mode=OneWay}" Width="200"/>
-      <DataGridTextColumn Header="Protection" Binding="{Binding ProtectReason, Mode=OneWay}" Width="200"/>
+      <DataGridTextColumn Header="$(TX 'Type')" Binding="{Binding TypeText, Mode=OneWay}" SortMemberPath="Type" Width="110"/>
+      <DataGridTextColumn Header="$(TX 'User')" Binding="{Binding UserName, Mode=OneWay}" Width="200"/>
+      <DataGridTextColumn Header="$(TX 'Last use')" Binding="{Binding LastUseText, Mode=OneWay}" SortMemberPath="LastUse" Width="125"/>
+      <DataGridTextColumn Header="$(TX 'Days')" Binding="{Binding DaysUnused, Mode=OneWay}" Width="62"/>
+      <DataGridTextColumn Header="$(TX 'Size')" Binding="{Binding SizeText, Mode=OneWay}" SortMemberPath="SizeBytes" Width="115"/>
+      <DataGridTextColumn Header="$(TX 'Loaded')" Binding="{Binding LoadedText, Mode=OneWay}" Width="70"/>
+      <DataGridTextColumn Header="$(TX 'Status')" Binding="{Binding Status, Mode=OneWay}" Width="190"/>
+      <DataGridTextColumn Header="$(TX 'Path')" Binding="{Binding Path, Mode=OneWay}" Width="200"/>
+      <DataGridTextColumn Header="$(TX 'Protection')" Binding="{Binding ProtectReason, Mode=OneWay}" Width="200"/>
       <DataGridTextColumn Header="SID" Binding="{Binding SID, Mode=OneWay}" Width="*"/>
     </DataGrid.Columns>
   </DataGrid>
@@ -99,10 +100,10 @@ Register-WTPage -Id 'Profiles' -Group 'Users' -Title 'User profiles' -Glyph '&#x
         $valid = @($sel | Where-Object { -not $_.Protected })
         if (-not $valid.Count) { Show-WTInfo 'All the selected items are protected.'; return }
         $sum = ($valid | Where-Object { $_.SizeBytes -gt 0 } | Measure-Object SizeBytes -Sum).Sum
-        $msg = "PERMANENTLY delete $($valid.Count) profiles/folders ($(Format-WTSize $sum)) with all their data?`n`n" +
+        $msg = (T "PERMANENTLY delete {0} profiles/folders ({1}) with all their data?`n`n" $valid.Count (Format-WTSize $sum)) +
             (Format-WTList $valid { "• $($_.UserName)  [$($_.Path)]  $($_.SizeText)" })
         $skipped = $sel.Count - $valid.Count
-        if ($skipped) { $msg += "`n`n$skipped protected items will be skipped." }
+        if ($skipped) { $msg += "`n`n" + (T '{0} protected items will be skipped.' $skipped) }
         if (-not (Show-WTConfirm $msg 'Delete profiles')) { return }
         Start-WTTask 'Deleting profiles' { param($Items, $Simulate) Remove-WTUserProfile -InputObject $Items -Simulate:$Simulate } `
             -Parameters @{ Items = $valid; Simulate = Get-WTSimulate } -OnComplete { Update-WTProfiles; Update-WTUserTargets }
@@ -111,7 +112,7 @@ Register-WTPage -Id 'Profiles' -Group 'Users' -Title 'User profiles' -Glyph '&#x
         $sel = @($ui.GridProfiles.SelectedItems | Where-Object { $_.SID })
         if ($sel.Count -ne 1) { Show-WTInfo "Select a single profile (the user's 'Profile' or 'Backup .bak' row)."; return }
         $sid = $sel[0].SID
-        if (-not (Show-WTConfirm "Restore the original profile of $($sel[0].UserName)?`n`nThe key pointing to the TEMP profile will be deleted and $sid.bak renamed. The user must be signed out.")) { return }
+        if (-not (Show-WTConfirm (T "Restore the original profile of {0}?`n`nThe key pointing to the TEMP profile will be deleted and {1}.bak renamed. The user must be signed out." $sel[0].UserName $sid))) { return }
         Start-WTTask 'TEMP profile repair' { param($Sid, $Simulate) Repair-WTTempProfile -Sid $Sid -Simulate:$Simulate } `
             -Parameters @{ Sid = $sid; Simulate = Get-WTSimulate } -OnComplete { Update-WTProfiles }
     }
@@ -130,7 +131,7 @@ Register-WTPage -Id 'Profiles' -Group 'Users' -Title 'User profiles' -Glyph '&#x
             [void]$ui.GridProfiles.SelectedItems.Add($item)
             $n++
         }
-        Write-WTLog "Selected $n profiles unused for at least $days days. Review them and press 'Delete selected'."
+        Write-WTLog (T "Selected {0} profiles unused for at least {1} days. Review them and press 'Delete selected'." $n $days)
     }
     On 'CmProfOpen' { if ($ui.GridProfiles.SelectedItem) { Open-WTPath $ui.GridProfiles.SelectedItem.Path } }
     On 'CmProfCopyPath' { if ($ui.GridProfiles.SelectedItem) { Set-WTClipboard $ui.GridProfiles.SelectedItem.Path } }

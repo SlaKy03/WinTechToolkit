@@ -22,7 +22,7 @@ function Get-WTOfficeInfo {
     if (-not $url) { $url = "$($c.CDNBaseUrl)" }
     $guid = ($url -split '/')[-1]
     $channel = $channels[$guid]
-    if (-not $channel) { $channel = 'custom / managed' }
+    if (-not $channel) { $channel = T 'custom / managed' }
     $info = [pscustomobject]@{
         Version  = $c.VersionToReport
         Platform = $c.Platform
@@ -30,8 +30,8 @@ function Get-WTOfficeInfo {
         Channel  = $channel
         Products = $c.ProductReleaseIds
     }
-    Write-WTLog ("Office {0} - {1} - {2} - language {3}" -f $info.Version, $info.Platform, $info.Channel, $info.Culture) -Level OK
-    Write-WTLog "Products: $($info.Products)"
+    Write-WTLog (T 'Office {0} - {1} - {2} - language {3}' $info.Version $info.Platform $info.Channel $info.Culture) -Level OK
+    Write-WTLog (T 'Products: {0}' $info.Products)
     $info
 }
 
@@ -46,8 +46,9 @@ function Repair-WTOffice {
     $c = Get-ItemProperty $script:WTC2RConfig
     $type = if ($Mode -eq 'Full') { 'FullRepair' } else { 'QuickRepair' }
     $arguments = "scenario=Repair platform=$($c.Platform) culture=$($c.ClientCulture) forceappshutdown=True RepairType=$type DisplayLevel=True"
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would run: OfficeClickToRun.exe $arguments"; return }
-    Write-WTLog "Starting $(if ($Mode -eq 'Full') { 'online' } else { 'quick' }) Office repair: open applications will be closed."
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would run: {0}' "OfficeClickToRun.exe $arguments"); return }
+    if ($Mode -eq 'Full') { Write-WTLog 'Starting the online Office repair: open applications will be closed.' }
+    else { Write-WTLog 'Starting the quick Office repair: open applications will be closed.' }
     Start-Process -FilePath $exe -ArgumentList $arguments
     Write-WTLog 'Repair started: progress is shown in the Office window.' -Level OK
 }
@@ -74,8 +75,8 @@ function Reset-WTTeamsCache {
         $found = $true
         $freed += Clear-WTFolderContent -Path $p -Simulate:$Simulate
     }
-    if (-not $found) { Write-WTLog "No Teams cache found in $ProfilePath." -Level Warn; return }
-    Write-WTLog "Teams cache cleared: $(Format-WTSize $freed). Teams will reload its data on the next start." -Level OK
+    if (-not $found) { Write-WTLog (T 'No Teams cache found in {0}.' $ProfilePath) -Level Warn; return }
+    Write-WTLog (T 'Teams cache cleared: {0}. Teams will reload its data on the next start.' (Format-WTSize $freed)) -Level OK
 }
 
 function Reset-WTOutlookCache {
@@ -83,17 +84,17 @@ function Reset-WTOutlookCache {
     param([Parameter(Mandatory)][string]$ProfilePath, [string]$UserName, [switch]$Simulate)
     $dir = "$ProfilePath\AppData\Local\Microsoft\Outlook"
     $osts = @(Get-ChildItem -LiteralPath $dir -Filter '*.ost' -Force -ErrorAction SilentlyContinue)
-    if (-not $osts.Count) { Write-WTLog "No .ost file found in $dir." -Level Warn; return }
+    if (-not $osts.Count) { Write-WTLog (T 'No .ost file found in {0}.' $dir) -Level Warn; return }
     if (-not $Simulate) { Stop-WTUserProcess -Name 'OUTLOOK' -UserName $UserName }
     foreach ($f in $osts) {
         $new = '{0}.old_{1:yyyyMMdd_HHmm}' -f $f.Name, (Get-Date)
-        if ($Simulate) { Write-WTLog "[SIMULATION] Would rename $($f.FullName) ($(Format-WTSize $f.Length))"; continue }
+        if ($Simulate) { Write-WTLog (T '[SIMULATION] Would rename {0} ({1})' $f.FullName (Format-WTSize $f.Length)); continue }
         try {
             Rename-Item -LiteralPath $f.FullName -NewName $new -ErrorAction Stop
-            Write-WTLog "Renamed $($f.Name) -> $new ($(Format-WTSize $f.Length))" -Level OK
-        } catch { Write-WTLog "Could not rename $($f.Name): $($_.Exception.Message)" -Level Error }
+            Write-WTLog (T 'Renamed {0} -> {1} ({2})' $f.Name $new (Format-WTSize $f.Length)) -Level OK
+        } catch { Write-WTLog (T 'Could not rename {0}: {1}' $f.Name $_.Exception.Message) -Level Error }
     }
-    Write-WTLog "On the next start Outlook will download the mailbox again: with large mailboxes this can take time. Delete the .old files after checking."
+    Write-WTLog 'On the next start Outlook will download the mailbox again: with large mailboxes this can take time. Delete the .old files after checking.'
 }
 
 function Start-WTOutlookMode {
@@ -113,7 +114,7 @@ function Reset-WTOfficeSignIn {
         Fixes the classic "sign-in required over and over" and "unlicensed product".
     #>
     param([Parameter(Mandatory)][string]$UserName, [switch]$Simulate)
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would close the Office apps and reset the Microsoft 365 sign-in and license for $UserName"; return }
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would close the Office apps and reset the Microsoft 365 sign-in and license for {0}' $UserName); return }
     Stop-WTUserProcess -Name $script:WTOfficeApps -UserName $UserName
     $script = @"
 foreach (`$k in 'HKCU:\Software\Microsoft\Office\16.0\Common\Identity', 'HKCU:\Software\Microsoft\Office\16.0\Common\Licensing', 'HKCU:\Software\Microsoft\Office\16.0\Registration') {
@@ -138,7 +139,7 @@ foreach (`$c in [WTCred]::List()) {
 function Reset-WTOneDrive {
     # onedrive.exe /reset in the user's session, then restart of the client
     param([Parameter(Mandatory)][string]$UserName, [switch]$Simulate)
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would run onedrive.exe /reset for $UserName"; return }
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would run onedrive.exe /reset for {0}' $UserName); return }
     $script = @'
 $exe = @("$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe", "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe", "${env:ProgramFiles(x86)}\Microsoft OneDrive\OneDrive.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1

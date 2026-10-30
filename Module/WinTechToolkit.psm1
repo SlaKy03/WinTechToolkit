@@ -11,4 +11,4 @@ foreach ($file in Get-ChildItem -Path (Join-Path $PSScriptRoot 'Functions') -Fil
     . $file.FullName
 }
 
-Export-ModuleMember -Function '*-WT*'
+Export-ModuleMember -Function '*-WT*' -Alias 'T'

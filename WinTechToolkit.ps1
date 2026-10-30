@@ -48,10 +48,14 @@ $dataDir = Get-WTDataFolder
 $global:WTLogFile = Join-Path $dataDir ('Logs\WinTech_{0}_{1:yyyyMMdd}.log' -f $env:COMPUTERNAME, (Get-Date))
 
 $settingsFile = Join-Path $dataDir 'settings.json'
-$settings = @{ Theme = 'Dark'; LogVisible = $true; SidebarExpanded = $null; Window = ''; Maximized = $false; LogHeight = 0 }
+$settings = @{ Theme = 'Dark'; LogVisible = $true; SidebarExpanded = $null; Window = ''; Maximized = $false; LogHeight = 0; Language = '' }
 if (Test-Path -LiteralPath $settingsFile) {
     try { (Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $settings[$_.Name] = $_.Value } } catch { }
 }
+# Interface language: the one chosen in the title bar, otherwise the Windows one. Read by T
+# (Get-WTText) here and in the operations, which get it with the runspace variables.
+$global:WTLanguage = Get-WTLanguage $settings.Language
+$script:Languages = [ordered]@{ en = 'English'; it = 'Italiano' }
 
 $script:Pages = New-Object System.Collections.Generic.List[object]
 $script:CurrentJob = $null
@@ -62,11 +66,17 @@ $script:UserTargets = @()
 $script:UserPanels = New-Object System.Collections.Generic.List[string]
 
 # --- XAML generators used by the pages ---------------------------------------
+# The text parameters of New-Tile, New-Pill, New-PageHeader and Register-WTPage are
+# translated (T): the pages pass the English text.
 function X([string]$Text) { [Security.SecurityElement]::Escape($Text) }
+
+# Translated and escaped for XAML: Text="$(TX 'Ready')"
+function TX { X (T @args) }
 
 function New-Tile {
     # in a WrapPanel the width is set by Initialize-WTTileRows
     param([string]$Name, [string]$Glyph, [string]$Title, [string]$Desc, [switch]$Danger)
+    $Title = T $Title; $Desc = T $Desc
     $icon = if ($Danger) { 'ErrBrush' } else { 'AccentBrush' }
 @"
 <Button x:Name="$Name" Style="{StaticResource Tile}" ToolTip="$(X $Desc)">
@@ -86,6 +96,7 @@ function New-Tile {
 
 function New-Pill {
     param([string]$Name, [string]$Glyph, [string]$Text, [switch]$Primary, [switch]$Danger, [string]$ToolTip = '', [string]$Tag = '')
+    $Text = T $Text; $ToolTip = T $ToolTip
     $style = if ($Danger) { 'PillDanger' } elseif ($Primary) { 'PillPrimary' } else { 'Pill' }
     $tt = if ($ToolTip) { " ToolTip=`"$(X $ToolTip)`"" } else { '' }
     $tg = if ($Tag) { " Tag=`"$(X $Tag)`"" } else { '' }
@@ -101,6 +112,7 @@ function New-Pill {
 
 function New-PageHeader {
     param([string]$Title, [string]$Subtitle, [string]$Right = '')
+    $Title = T $Title; $Subtitle = T $Subtitle
 @"
 <DockPanel>
   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">$Right</StackPanel>
@@ -124,7 +136,7 @@ function Register-WTPage {
         [scriptblock]$Init, [scriptblock]$Load, [scriptblock]$Refresh, [string]$SearchBox
     )
     $script:Pages.Add([pscustomobject]@{
-            Id = $Id; Group = $Group; Title = $Title; Glyph = $Glyph; Xaml = $Xaml
+            Id = $Id; Group = (T $Group); Title = (T $Title); Glyph = $Glyph; Xaml = $Xaml
             Init = $Init; Load = $Load; Refresh = $Refresh; SearchBox = $SearchBox; Index = $script:Pages.Count
         })
 }
@@ -174,14 +186,15 @@ $xaml = @"
     <Border Grid.Row="0" Background="{DynamicResource PanelBrush}">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-          <CheckBox x:Name="ChkSimulate" Style="{StaticResource Switch}" Content="Simulation" Margin="0,0,12,0" WindowChrome.IsHitTestVisibleInChrome="True"
-                    ToolTip="Operations that change the system are only described in the activity log."/>
-          <Button x:Name="BtnTheme" Style="{StaticResource CaptionButton}" FontSize="14" ToolTip="Light / dark theme"/>
-          <Button x:Name="BtnMin" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize"/>
-          <Button x:Name="BtnMax" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize"/>
-          <Button x:Name="BtnClose" Style="{StaticResource CloseButton}" Content="&#xE8BB;" ToolTip="Close"/>
+          <CheckBox x:Name="ChkSimulate" Style="{StaticResource Switch}" Content="$(TX 'Simulation')" Margin="0,0,12,0" WindowChrome.IsHitTestVisibleInChrome="True"
+                    ToolTip="$(TX 'Operations that change the system are only described in the activity log.')"/>
+          <Button x:Name="BtnLang" Style="{StaticResource CaptionButton}" FontFamily="Segoe UI" FontWeight="SemiBold" Content="$($global:WTLanguage.ToUpper())" ToolTip="$(TX 'Language')"/>
+          <Button x:Name="BtnTheme" Style="{StaticResource CaptionButton}" FontSize="14" ToolTip="$(TX 'Light / dark theme')"/>
+          <Button x:Name="BtnMin" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="$(TX 'Minimize')"/>
+          <Button x:Name="BtnMax" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="$(TX 'Maximize')"/>
+          <Button x:Name="BtnClose" Style="{StaticResource CloseButton}" Content="&#xE8BB;" ToolTip="$(TX 'Close')"/>
         </StackPanel>
-        <Button x:Name="BtnNavToggle" DockPanel.Dock="Left" Style="{StaticResource CaptionButton}" Width="62" FontSize="15" Content="&#xE700;" ToolTip="Collapse / expand the menu"/>
+        <Button x:Name="BtnNavToggle" DockPanel.Dock="Left" Style="{StaticResource CaptionButton}" Width="62" FontSize="15" Content="&#xE700;" ToolTip="$(TX 'Collapse / expand the menu')"/>
         <Border x:Name="AppLogo" DockPanel.Dock="Left" Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
           <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
@@ -199,7 +212,7 @@ $xaml = @"
 
     <Border x:Name="SimBanner" Grid.Row="1" Background="{DynamicResource BannerBrush}" Padding="12,5" Visibility="Collapsed">
       <TextBlock Foreground="{DynamicResource BannerTextBrush}" FontWeight="SemiBold" HorizontalAlignment="Center">
-        <Run Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets"/><Run Text="  Simulation mode: no changes will be applied to the system"/>
+        <Run Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets"/><Run Text="  $(TX 'Simulation mode: no changes will be applied to the system')"/>
       </TextBlock>
     </Border>
 
@@ -213,8 +226,8 @@ $xaml = @"
         <DockPanel>
           <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,8">
             <Border Height="1" Background="{DynamicResource LineBrush}" Margin="16,0,16,6"/>
-            <RadioButton x:Name="NavData" Style="{StaticResource NavButton}" GroupName="Links" Tag="&#xE8B7;" Content="Logs and reports" ToolTip="Opens the folder with logs, reports and registry backups"/>
-            <RadioButton x:Name="NavAbout" Style="{StaticResource NavButton}" GroupName="Links" Tag="&#xE946;" Content="About" ToolTip="Version and project page"/>
+            <RadioButton x:Name="NavData" Style="{StaticResource NavButton}" GroupName="Links" Tag="&#xE8B7;" Content="$(TX 'Logs and reports')" ToolTip="$(TX 'Opens the folder with logs, reports and registry backups')"/>
+            <RadioButton x:Name="NavAbout" Style="{StaticResource NavButton}" GroupName="Links" Tag="&#xE946;" Content="$(TX 'About')" ToolTip="$(TX 'Version and project page')"/>
             <TextBlock x:Name="TxtVersion" FontSize="10.5" Foreground="{DynamicResource SubtleBrush}" Margin="22,4,0,0"/>
           </StackPanel>
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -246,12 +259,12 @@ $xaml = @"
           <DockPanel>
             <DockPanel DockPanel.Dock="Top" Margin="14,3,6,2">
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="BtnLogCopy" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="Copy the whole log"/>
-                <Button x:Name="BtnLogOpen" Style="{StaticResource IconButton}" Content="&#xE8E5;" ToolTip="Open the log file"/>
-                <Button x:Name="BtnLogClear" Style="{StaticResource IconButton}" Content="&#xE894;" ToolTip="Clear the view"/>
-                <Button x:Name="BtnLogHide" Style="{StaticResource IconButton}" Content="&#xE70D;" ToolTip="Hide (Ctrl+L)"/>
+                <Button x:Name="BtnLogCopy" Style="{StaticResource IconButton}" Content="&#xE8C8;" ToolTip="$(TX 'Copy the whole log')"/>
+                <Button x:Name="BtnLogOpen" Style="{StaticResource IconButton}" Content="&#xE8E5;" ToolTip="$(TX 'Open the log file')"/>
+                <Button x:Name="BtnLogClear" Style="{StaticResource IconButton}" Content="&#xE894;" ToolTip="$(TX 'Clear the view')"/>
+                <Button x:Name="BtnLogHide" Style="{StaticResource IconButton}" Content="&#xE70D;" ToolTip="$(TX 'Hide (Ctrl+L)')"/>
               </StackPanel>
-              <TextBlock Text="ACTIVITY LOG" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource SubtleBrush}" VerticalAlignment="Center"/>
+              <TextBlock Text="$(X (T 'Activity log').ToUpper())" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource SubtleBrush}" VerticalAlignment="Center"/>
             </DockPanel>
             <ListBox x:Name="LogList" Background="{DynamicResource LogBgBrush}" BorderThickness="0" SelectionMode="Extended"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.HorizontalScrollBarVisibility="Auto">
@@ -281,8 +294,8 @@ $xaml = @"
               </ListBox.ItemTemplate>
               <ListBox.ContextMenu>
                 <ContextMenu>
-                  <MenuItem x:Name="CmLogCopySel" Header="Copy selected lines"/>
-                  <MenuItem x:Name="CmLogCopyAll" Header="Copy all"/>
+                  <MenuItem x:Name="CmLogCopySel" Header="$(TX 'Copy selected lines')"/>
+                  <MenuItem x:Name="CmLogCopyAll" Header="$(TX 'Copy all')"/>
                 </ContextMenu>
               </ListBox.ContextMenu>
             </ListBox>
@@ -296,13 +309,13 @@ $xaml = @"
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
           <TextBlock x:Name="TxtBg" Foreground="{DynamicResource SubtleBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0"/>
           <TextBlock x:Name="TxtQueue" Foreground="{DynamicResource WarnBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0"/>
-          <Button x:Name="BtnToggleLog" Style="{StaticResource LinkButton}" Content="Hide activity log (Ctrl+L)"/>
+          <Button x:Name="BtnToggleLog" Style="{StaticResource LinkButton}"/>
         </StackPanel>
         <ProgressBar x:Name="PbBusy" Width="140" Height="4" Margin="0,0,10,0" Visibility="Collapsed" VerticalAlignment="Center"/>
-        <Button x:Name="BtnStop" Style="{StaticResource LinkButton}" Margin="0,0,12,0" Visibility="Collapsed" ToolTip="Stop the running operation">
-          <TextBlock><Run Text="&#xE71A;" FontFamily="Segoe MDL2 Assets" FontSize="10"/><Run Text=" Stop"/></TextBlock>
+        <Button x:Name="BtnStop" Style="{StaticResource LinkButton}" Margin="0,0,12,0" Visibility="Collapsed" ToolTip="$(TX 'Stop the running operation')">
+          <TextBlock><Run Text="&#xE71A;" FontFamily="Segoe MDL2 Assets" FontSize="10"/><Run Text=" $(TX 'Stop')"/></TextBlock>
         </Button>
-        <TextBlock x:Name="TxtStatus" Text="Ready" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        <TextBlock x:Name="TxtStatus" Text="$(TX 'Ready')" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
       </DockPanel>
     </Border>
 
@@ -316,7 +329,7 @@ $xaml = @"
           <StackPanel>
             <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="11,11,0,0" Padding="26,24,14,22">
               <DockPanel>
-                <Button x:Name="BtnAboutClose" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8BB;" VerticalAlignment="Top" ToolTip="Close (Esc)"/>
+                <Button x:Name="BtnAboutClose" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8BB;" VerticalAlignment="Top" ToolTip="$(TX 'Close (Esc)')"/>
                 <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource AccentBrush}" Margin="0,0,20,0" VerticalAlignment="Center">
                   <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="30" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
@@ -328,7 +341,7 @@ $xaml = @"
                       <TextBlock x:Name="TxtAboutBadge" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}"/>
                     </Border>
                   </StackPanel>
-                  <TextBlock Text="Diagnostics, repair and maintenance for Windows 10/11." Margin="0,8,0,0" TextWrapping="Wrap"/>
+                  <TextBlock Text="$(TX 'Diagnostics, repair and maintenance for Windows 10/11.')" Margin="0,8,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
               </DockPanel>
             </Border>
@@ -341,18 +354,18 @@ $xaml = @"
               <Grid.Resources>
                 <Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
               </Grid.Resources>
-              <TextBlock x:Name="LblAboutPackage" Grid.Row="0" Text="Package" Foreground="{DynamicResource SubtleBrush}"/>
+              <TextBlock x:Name="LblAboutPackage" Grid.Row="0" Text="$(TX 'Package')" Foreground="{DynamicResource SubtleBrush}"/>
               <TextBlock x:Name="TxtAboutPackage" Grid.Row="0" Grid.Column="1"/>
               <TextBlock Grid.Row="1" Text="Windows" Foreground="{DynamicResource SubtleBrush}"/>
               <TextBlock x:Name="TxtAboutWindows" Grid.Row="1" Grid.Column="1"/>
               <TextBlock Grid.Row="2" Text="PowerShell" Foreground="{DynamicResource SubtleBrush}"/>
               <TextBlock x:Name="TxtAboutPs" Grid.Row="2" Grid.Column="1"/>
-              <TextBlock Grid.Row="3" Text="Running as" Foreground="{DynamicResource SubtleBrush}"/>
+              <TextBlock Grid.Row="3" Text="$(TX 'Running as')" Foreground="{DynamicResource SubtleBrush}"/>
               <TextBlock x:Name="TxtAboutUser" Grid.Row="3" Grid.Column="1"/>
-              <TextBlock Grid.Row="4" Text="Data and logs" Foreground="{DynamicResource SubtleBrush}"/>
-              <Button x:Name="BtnAboutData" Grid.Row="4" Grid.Column="1" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" ToolTip="Open the folder"/>
-              <TextBlock Grid.Row="5" Text="Today's log" Foreground="{DynamicResource SubtleBrush}"/>
-              <Button x:Name="BtnAboutLog" Grid.Row="5" Grid.Column="1" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" ToolTip="Open in Notepad"/>
+              <TextBlock Grid.Row="4" Text="$(TX 'Data and logs')" Foreground="{DynamicResource SubtleBrush}"/>
+              <Button x:Name="BtnAboutData" Grid.Row="4" Grid.Column="1" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" ToolTip="$(TX 'Open the folder')"/>
+              <TextBlock Grid.Row="5" Text="$(TX "Today's log")" Foreground="{DynamicResource SubtleBrush}"/>
+              <Button x:Name="BtnAboutLog" Grid.Row="5" Grid.Column="1" Style="{StaticResource LinkButton}" FontSize="13" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,0,0,8" ToolTip="$(TX 'Open in Notepad')"/>
             </Grid>
             <WrapPanel Margin="26,4,20,14">
               $(New-Pill -Name 'BtnAboutProject' -Glyph '&#xE774;' -Text 'Project page' -Primary)
@@ -362,7 +375,7 @@ $xaml = @"
             </WrapPanel>
             <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="26,10,26,12">
               <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="MIT License" FontSize="11.5" Foreground="{DynamicResource SubtleBrush}"/>
+                <TextBlock DockPanel.Dock="Right" Text="$(TX 'MIT License')" FontSize="11.5" Foreground="{DynamicResource SubtleBrush}"/>
                 <TextBlock x:Name="TxtAboutCopyright" FontSize="11.5" Foreground="{DynamicResource SubtleBrush}"/>
               </DockPanel>
             </Border>
@@ -381,8 +394,8 @@ $xaml = @"
           <DockPanel>
             <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBrush}" CornerRadius="0,0,11,11" Padding="20,12">
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="BtnDlgYes" Style="{StaticResource PillPrimary}" MinWidth="96" Margin="0" Content="Yes"/>
-                <Button x:Name="BtnDlgNo" Style="{StaticResource Pill}" MinWidth="96" Margin="8,0,0,0" Content="No"/>
+                <Button x:Name="BtnDlgYes" Style="{StaticResource PillPrimary}" MinWidth="96" Margin="0" Content="$(TX 'Yes')"/>
+                <Button x:Name="BtnDlgNo" Style="{StaticResource Pill}" MinWidth="96" Margin="8,0,0,0" Content="$(TX 'No')"/>
               </StackPanel>
             </Border>
             <DockPanel Margin="22,20,24,20">
@@ -451,7 +464,7 @@ function Show-WTDialog {
     $ui.DlgIcon.Text = $(if ($Kind -eq 'Warning') { [string][char]0xE7BA } else { [string][char]0xE946 })
     $ui.DlgIcon.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, $icon)
     $ui.DlgIconBg.SetResourceReference([System.Windows.Shapes.Shape]::FillProperty, $icon)
-    $ui.BtnDlgYes.Content = $(if ($YesNo) { 'Yes' } else { 'OK' })
+    $ui.BtnDlgYes.Content = $(if ($YesNo) { T 'Yes' } else { 'OK' })
     $ui.BtnDlgNo.Visibility = $(if ($YesNo) { 'Visible' } else { 'Collapsed' })
 
     $focused = [System.Windows.Input.Keyboard]::FocusedElement
@@ -479,12 +492,13 @@ function Close-WTDialog([bool]$Result) {
     $script:DialogFrame.Continue = $false
 }
 
+# Message and title are translated (T): the pages pass the English text
 function Show-WTConfirm([string]$Message, [string]$Title = 'Confirm') {
-    Show-WTDialog -Message $Message -Title $Title -Kind Warning -YesNo
+    Show-WTDialog -Message (T $Message) -Title (T $Title) -Kind Warning -YesNo
 }
 
 function Show-WTInfo([string]$Message) {
-    [void](Show-WTDialog -Message $Message -Title $app.Name)
+    [void](Show-WTDialog -Message (T $Message) -Title $app.Name)
 }
 
 function Write-WTCrash($Exception) {
@@ -497,7 +511,7 @@ function Write-WTCrash($Exception) {
         if ($err -is [System.Management.Automation.IContainsErrorRecord] -and $err.ErrorRecord.InvocationInfo) {
             $where = $err.ErrorRecord.InvocationInfo.PositionMessage
         }
-        Write-WTLog "Unexpected error in the interface: $($err.Message)" -Level Error
+        Write-WTLog (T 'Unexpected error in the interface: {0}' $err.Message) -Level Error
         $file = Join-Path $dataDir ('Logs\Crash_{0}_{1:yyyyMMdd_HHmmss}.txt' -f $env:COMPUTERNAME, (Get-Date))
         $text = @("$($app.Name) $($app.Version)", "Windows: $(Get-WTWindowsText)", "PowerShell: $($PSVersionTable.PSVersion)", '',
             $err.Message, '', $where, '', $Exception.ToString()) -join "`r`n"
@@ -505,7 +519,7 @@ function Write-WTCrash($Exception) {
         Update-WTLogView
         if ($script:LastCrashShown -and ((Get-Date) - $script:LastCrashShown).TotalSeconds -lt 10) { return }
         $script:LastCrashShown = Get-Date
-        $script:CrashMessage = "An unexpected error occurred in the interface:`n$($err.Message)`n`nYou can keep working. The details were saved to:`n$file`n`nIf it happens again, please report it with this file."
+        $script:CrashMessage = T "An unexpected error occurred in the interface:`n{0}`n`nYou can keep working. The details were saved to:`n{1}`n`nIf it happens again, please report it with this file." $err.Message $file
         # shown after the dispatcher has finished handling the exception
         [void]$window.Dispatcher.BeginInvoke([Action]{ Show-WTInfo $script:CrashMessage })
     } catch { }
@@ -515,7 +529,7 @@ function Get-WTSimulate { [bool]$ui.ChkSimulate.IsChecked }
 
 function Format-WTList([object[]]$Items, [scriptblock]$Format, [int]$Max = 20) {
     $lines = @($Items | Select-Object -First $Max | ForEach-Object $Format)
-    if ($Items.Count -gt $Max) { $lines += "... and $($Items.Count - $Max) more" }
+    if ($Items.Count -gt $Max) { $lines += T '... and {0} more' ($Items.Count - $Max) }
     $lines -join "`n"
 }
 
@@ -528,7 +542,7 @@ function Open-WTPath([string]$Path) {
     if (-not $Path) { return }
     if (Test-Path -LiteralPath $Path -PathType Container) { Start-Process explorer.exe -ArgumentList "`"$Path`"" }
     elseif (Test-Path -LiteralPath $Path) { Start-Process explorer.exe -ArgumentList "/select,`"$Path`"" }
-    else { Show-WTInfo "Path not found:`n$Path" }
+    else { Show-WTInfo (T "Path not found:`n{0}" $Path) }
 }
 
 function Open-WTRegistryKey([string]$Key) {
@@ -566,7 +580,7 @@ function Update-WTWindowFrame {
     # on Windows 11 the border is drawn by DWM, together with the rounded corners
     $ui.RootBorder.BorderThickness = New-Object System.Windows.Thickness $(if ($max -or $script:DwmFrame) { 0 } else { 1 })
     $ui.BtnMax.Content = $(if ($max) { [string][char]0xE923 } else { [string][char]0xE922 })
-    $ui.BtnMax.ToolTip = $(if ($max) { 'Restore' } else { 'Maximize' })
+    $ui.BtnMax.ToolTip = $(if ($max) { T 'Restore' } else { T 'Maximize' })
 }
 
 function Format-WTAccount([string]$Name) {
@@ -575,21 +589,22 @@ function Format-WTAccount([string]$Name) {
     $Name
 }
 
-function Set-WTHeaderInfo([string]$Domain, [string]$User, [switch]$Loaded) {
+function Set-WTHeaderInfo([string]$Domain, [string]$DomainName, [string]$User, [switch]$Loaded) {
+    # Domain: "contoso.local" or "Workgroup WORKGROUP" (tooltip), DomainName: without "Workgroup"
     $me = Format-WTAccount $identity.Name
     $parts = @($env:COMPUTERNAME)
-    $tip = @("Computer: $env:COMPUTERNAME")
-    if ($Domain) { $parts += ($Domain -replace '^Workgroup ', ''); $tip += "Domain: $Domain" }
+    $tip = @((T 'Computer: {0}' $env:COMPUTERNAME))
+    if ($Domain) { $parts += $DomainName; $tip += T 'Domain: {0}' $Domain }
     if ($Loaded) {
         $u = if ($User) { Format-WTAccount $User } else { '' }
-        $parts += $(if ($u) { "signed in: $u" } else { 'nobody signed in' })
-        $tip += "Signed-in user: $(if ($User) { $User } else { 'none' })"
+        $parts += $(if ($u) { T 'signed in: {0}' $u } else { T 'nobody signed in' })
+        $tip += T 'Signed-in user: {0}' $(if ($User) { $User } else { T 'none' })
         # the toolkit often runs with another administrator account: show it only then
-        if ($u -ne $me) { $parts += "running as $me" }
+        if ($u -ne $me) { $parts += T 'running as {0}' $me }
     } else {
-        $parts += "running as $me"
+        $parts += T 'running as {0}' $me
     }
-    $tip += "Toolkit running as: $($identity.Name)"
+    $tip += T 'Toolkit running as: {0}' $identity.Name
     $ui.TxtHeaderInfo.Text = $parts -join '  ·  '
     $ui.TxtHeaderInfo.ToolTip = $tip -join "`n"
 }
@@ -671,13 +686,13 @@ function Get-WTAboutText {
 
 function Show-WTAbout {
     if (-not $script:WindowsText) { $script:WindowsText = Get-WTWindowsText }
-    $ui.TxtAboutVersion.Text = "Version $($app.Version)"
+    $ui.TxtAboutVersion.Text = T 'Version {0}' $app.Version
     $ui.LblAboutPackage.Visibility = $(if ($env:WTK_PACKAGE) { 'Visible' } else { 'Collapsed' })
     $ui.TxtAboutPackage.Visibility = $ui.LblAboutPackage.Visibility
     $ui.TxtAboutPackage.Text = "$env:WTK_PACKAGE"
     $ui.TxtAboutWindows.Text = $script:WindowsText
     $ui.TxtAboutPs.Text = "$($PSVersionTable.PSVersion) ($([IntPtr]::Size * 8)-bit)"
-    $ui.TxtAboutUser.Text = "$($identity.Name) (administrator)"
+    $ui.TxtAboutUser.Text = T '{0} (administrator)' $identity.Name
     $ui.BtnAboutData.Content = $dataDir
     $ui.BtnAboutLog.Content = Split-Path $global:WTLogFile -Leaf
     foreach ($b in 'BtnAboutProject', 'BtnAboutIssue', 'BtnAboutReleases') { $ui[$b].IsEnabled = [bool]$script:RepoUrl }
@@ -701,12 +716,12 @@ function Set-WTLogVisible([bool]$Visible) {
         $ui.LogRow.Height = New-Object System.Windows.GridLength $h
         $ui.SplitRow.Height = New-Object System.Windows.GridLength 6
         $ui.LogPanel.Visibility = 'Visible'
-        $ui.BtnToggleLog.Content = 'Hide activity log (Ctrl+L)'
+        $ui.BtnToggleLog.Content = T 'Hide activity log (Ctrl+L)'
     } else {
         $ui.LogRow.Height = New-Object System.Windows.GridLength 0
         $ui.SplitRow.Height = New-Object System.Windows.GridLength 0
         $ui.LogPanel.Visibility = 'Collapsed'
-        $ui.BtnToggleLog.Content = 'Show activity log (Ctrl+L)'
+        $ui.BtnToggleLog.Content = T 'Show activity log (Ctrl+L)'
     }
     $settings.LogVisible = $Visible
 }
@@ -715,8 +730,8 @@ function Set-WTSidebar([bool]$Expanded) {
     # Collapsed: centred icons only, names stay in the tooltips
     $ui.SidebarCol.Width = New-Object System.Windows.GridLength $(if ($Expanded) { 232 } else { 62 })
     foreach ($p in $script:Pages) { $ui["Nav_$($p.Id)"].Content = $(if ($Expanded) { $p.Title } else { $null }) }
-    $ui.NavData.Content = $(if ($Expanded) { 'Logs and reports' } else { $null })
-    $ui.NavAbout.Content = $(if ($Expanded) { 'About' } else { $null })
+    $ui.NavData.Content = $(if ($Expanded) { T 'Logs and reports' } else { $null })
+    $ui.NavAbout.Content = $(if ($Expanded) { T 'About' } else { $null })
     $ui.TxtVersion.Visibility = $(if ($Expanded) { 'Visible' } else { 'Collapsed' })
     for ($i = 0; $ui.ContainsKey("NavHdr$i"); $i++) {
         $ui["NavHdr$i"].Visibility = $(if ($Expanded) { 'Visible' } else { 'Collapsed' })
@@ -741,14 +756,14 @@ function Set-WTBusy([bool]$Busy, [string]$Text = '') {
     $ui.BtnStop.Visibility = $ui.PbBusy.Visibility
     $ui.BtnStop.IsEnabled = $true
     $window.TaskbarItemInfo.ProgressState = $(if ($Busy) { 'Indeterminate' } else { 'None' })
-    $ui.TxtStatus.Text = $(if ($Busy) { "Running: $Text" } else { 'Ready' })
+    $ui.TxtStatus.Text = $(if ($Busy) { T 'Running: {0}' $Text } else { T 'Ready' })
 }
 
 function Update-WTStatusExtras {
     $n = $script:TaskQueue.Count
-    $ui.TxtQueue.Text = $(if ($n) { "$n operations queued" } else { '' })
+    $ui.TxtQueue.Text = $(if ($n) { T '{0} operations queued' $n } else { '' })
     $b = $script:BgJobs.Count
-    $ui.TxtBg.Text = $(if ($b) { "Loading data in the background ($b)..." } else { '' })
+    $ui.TxtBg.Text = $(if ($b) { T 'Loading data in the background ({0})...' $b } else { '' })
 }
 
 function Update-WTLogView {
@@ -780,6 +795,7 @@ $iss.ImportPSModule([string[]]@($modulePath))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTQueue', $global:WTQueue, '')))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTLogFile', $global:WTLogFile, '')))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTProcesses', $global:WTProcesses, '')))
+$iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTLanguage', $global:WTLanguage, '')))
 $script:Pool = [runspacefactory]::CreateRunspacePool(1, 5, $iss, $Host)
 $script:Pool.ApartmentState = 'STA'
 $script:Pool.Open()
@@ -805,7 +821,8 @@ function Invoke-WTTaskNow($Task) {
     if ($Task.Background) {
         $script:BgJobs.Add($job)
     } else {
-        Write-WTLog "=== Start: $($Task.Title)$(if (Get-WTSimulate) { ' [SIMULATION]' }) ==="
+        $title = if (Get-WTSimulate) { '{0} [{1}]' -f $Task.Title, (T 'Simulation').ToUpper() } else { $Task.Title }
+        Write-WTLog (T '=== Start: {0} ===' $title)
         $script:CurrentJob = $job
         Set-WTBusy $true $Task.Title
     }
@@ -822,7 +839,7 @@ function Stop-WTCurrentTask([switch]$Force) {
     $job = $script:CurrentJob
     if (-not $job -or $job.Cancelled) { return }
     if (-not $Force) {
-        $msg = "Stop '$($job.Title)'?`n`nThe programs it started (e.g. DISM, SFC, CHKDSK) are terminated: run the operation again later to complete it. An uninstaller already running is left to finish."
+        $msg = T "Stop '{0}'?`n`nThe programs it started (e.g. DISM, SFC, CHKDSK) are terminated: run the operation again later to complete it. An uninstaller already running is left to finish." $job.Title
         if (-not (Show-WTConfirm $msg 'Stop the operation')) { return }
         if ($script:CurrentJob -ne $job) { return }   # finished while the question was open
     }
@@ -830,13 +847,13 @@ function Stop-WTCurrentTask([switch]$Force) {
     $ui.BtnStop.IsEnabled = $false
     $window.TaskbarItemInfo.ProgressState = 'Paused'
     $window.TaskbarItemInfo.ProgressValue = 1
-    Write-WTLog "Stopping: $($job.Title)..." -Level Warn
+    Write-WTLog (T 'Stopping: {0}...' $job.Title) -Level Warn
     foreach ($kv in @($global:WTProcesses.GetEnumerator())) {
         if ($kv.Value -ne $job.Id) { continue }
         & taskkill.exe /PID $kv.Key /T /F 2>&1 | Out-Null
     }
     [void]$job.PS.BeginStop($null, $null)
-    if ($script:TaskQueue.Count) { Write-WTLog "$($script:TaskQueue.Count) queued operations will still run." }
+    if ($script:TaskQueue.Count) { Write-WTLog (T '{0} queued operations will still run.' $script:TaskQueue.Count) }
 }
 
 function Start-WTTask {
@@ -844,7 +861,7 @@ function Start-WTTask {
     .SYNOPSIS
         Runs a scriptblock in the pool (with the module loaded); OnComplete receives the
         output on the UI thread. -Background: data loading, does not block and never asks anything.
-        Otherwise, if an operation is already running, the new one is queued.
+        Otherwise, if an operation is already running, the new one is queued. The title is translated (T).
     #>
     param(
         [Parameter(Mandatory, Position = 0)][string]$Title,
@@ -854,11 +871,12 @@ function Start-WTTask {
         [switch]$Background,
         [switch]$Queue
     )
+    $Title = T $Title
     $task = [pscustomobject]@{ Title = $Title; Script = $Script; Parameters = $Parameters; OnComplete = $OnComplete; Background = [bool]$Background }
     if (-not $Background -and $script:CurrentJob) {
-        if (-not $Queue -and -not (Show-WTConfirm "Currently running: $($script:CurrentJob.Title)`n`nQueue '$Title' to run when it finishes?" 'Operation in progress')) { return }
+        if (-not $Queue -and -not (Show-WTConfirm (T "Currently running: {0}`n`nQueue '{1}' to run when it finishes?" $script:CurrentJob.Title $Title) 'Operation in progress')) { return }
         $script:TaskQueue.Enqueue($task)
-        Write-WTLog "Queued: $Title"
+        Write-WTLog (T 'Queued: {0}' $Title)
         Update-WTStatusExtras
         return
     }
@@ -877,15 +895,15 @@ function Complete-WTJob($Job) {
     $Job | Add-Member -NotePropertyName Failed -NotePropertyValue $failed -Force
     $Job.PS.Dispose()
     if ($Job.Cancelled) {
-        Write-WTLog ('=== Stopped: {0} (after {1:hh\:mm\:ss}) ===' -f $Job.Title, ((Get-Date) - $Job.Start))
+        Write-WTLog (T '=== Stopped: {0} (after {1:hh\:mm\:ss}) ===' $Job.Title ((Get-Date) - $Job.Start))
     } elseif (-not $Job.Background) {
-        Write-WTLog ('=== Done: {0} (duration {1:hh\:mm\:ss}) ===' -f $Job.Title, ((Get-Date) - $Job.Start))
+        Write-WTLog (T '=== Done: {0} (duration {1:hh\:mm\:ss}) ===' $Job.Title ((Get-Date) - $Job.Start))
     }
     Update-WTLogView
     # a stopped operation returns partial results: the interface is not updated with them
     if ($Job.OnComplete -and -not $Job.Cancelled) {
         try { & $Job.OnComplete $result }
-        catch { Write-WTLog "Updating the interface ($($Job.Title)):$($_.Exception.Message)" -Level Error }
+        catch { Write-WTLog (T 'Updating the interface ({0}): {1}' $Job.Title $_.Exception.Message) -Level Error }
     }
 }
 
@@ -894,7 +912,7 @@ function Send-WTCompletionNotice($Job) {
     # failed) and a Windows notification; clicking it brings the window back
     $elapsed = (Get-Date) - $Job.Start
     if ($window.IsActive -or $elapsed.TotalSeconds -lt 15) { return }
-    $outcome = if ($Job.Cancelled) { 'stopped' } elseif ($Job.Failed) { 'finished with errors: see the activity log' } else { 'completed' }
+    $outcome = if ($Job.Cancelled) { T 'stopped' } elseif ($Job.Failed) { T 'finished with errors: see the activity log' } else { T 'completed' }
     if ($Job.Failed) { $window.TaskbarItemInfo.ProgressState = 'Error'; $window.TaskbarItemInfo.ProgressValue = 1 }
     [WTWindowHelper]::FlashTaskbar($script:Hwnd)
     Show-WTNotification $Job.Title ('{0} ({1:hh\:mm\:ss})' -f $outcome, $elapsed) -Warning:$Job.Failed
@@ -960,7 +978,7 @@ $timer.Add_Tick({
             }
             $job = $script:CurrentJob
             if ($job) {
-                $ui.TxtStatus.Text = '{0}: {1}  ({2:hh\:mm\:ss})' -f $(if ($job.Cancelled) { 'Stopping' } else { 'Running' }), $job.Title, ((Get-Date) - $job.Start)
+                $ui.TxtStatus.Text = '{0}: {1}  ({2:hh\:mm\:ss})' -f $(if ($job.Cancelled) { T 'Stopping' } else { T 'Running' }), $job.Title, ((Get-Date) - $job.Start)
                 if ($job.Handle.IsCompleted) {
                     $script:CurrentJob = $null
                     Set-WTBusy $false
@@ -988,7 +1006,7 @@ function Show-WTUserChips([string]$PanelName) {
     $panel.Children.Clear()
     if (-not $script:UserTargets.Count) {
         $tb = New-Object System.Windows.Controls.TextBlock
-        $tb.Text = 'No user profile found.'
+        $tb.Text = T 'No user profile found.'
         [void]$panel.Children.Add($tb)
         return
     }
@@ -998,7 +1016,7 @@ function Show-WTUserChips([string]$PanelName) {
         $rb.Style = $window.FindResource('Chip')
         $rb.GroupName = $PanelName
         $rb.Content = $(if ($u.LoggedOn) { "$([char]0x25CF)  $($u.UserName)" } else { $u.UserName })
-        $rb.ToolTip = $(if ($u.LoggedOn) { "Signed in - $($u.ProfilePath)" } else { "Not signed in - $($u.ProfilePath)" })
+        $rb.ToolTip = $(if ($u.LoggedOn) { T 'Signed in - {0}' $u.ProfilePath } else { T 'Not signed in - {0}' $u.ProfilePath })
         $rb.Tag = $u
         if ($first) { $rb.IsChecked = $true; $first = $false }
         [void]$panel.Children.Add($rb)
@@ -1010,10 +1028,49 @@ function Get-WTSelectedUser([string]$PanelName, [switch]$RequireLoggedOn) {
     if (-not $rb) { Show-WTInfo 'Select a user.'; return $null }
     $u = $rb.Tag
     if ($RequireLoggedOn -and -not $u.LoggedOn) {
-        Show-WTInfo "$($u.UserName) has no open session: this operation requires the user to be signed in to the PC."
+        Show-WTInfo (T '{0} has no open session: this operation requires the user to be signed in to the PC.' $u.UserName)
         return $null
     }
     $u
+}
+
+function Show-WTLanguageMenu {
+    # Languages with the current one ticked; the change restarts the window
+    $menu = New-Object System.Windows.Controls.ContextMenu
+    foreach ($code in $script:Languages.Keys) {
+        $item = New-Object System.Windows.Controls.MenuItem
+        $row = New-Object System.Windows.Controls.StackPanel
+        $row.Orientation = 'Horizontal'
+        $check = New-Object System.Windows.Controls.TextBlock
+        $check.Text = $(if ($code -eq $global:WTLanguage) { [string][char]0xE73E } else { '' })
+        $check.FontFamily = 'Segoe MDL2 Assets'
+        $check.Width = 22
+        $check.VerticalAlignment = 'Center'
+        $name = New-Object System.Windows.Controls.TextBlock
+        $name.Text = $script:Languages[$code]
+        [void]$row.Children.Add($check)
+        [void]$row.Children.Add($name)
+        $item.Header = $row
+        $item.Tag = $code
+        $item.Add_Click({ param($s) Set-WTLanguage ([string]$s.Tag) })
+        [void]$menu.Items.Add($item)
+    }
+    $menu.PlacementTarget = $ui.BtnLang
+    $menu.Placement = 'Bottom'
+    $menu.IsOpen = $true
+}
+
+function Set-WTLanguage([string]$Code) {
+    # The texts are set when the window is built: a new language needs a restart, done in the
+    # same process (start.ps1 deletes its temporary folder when the process ends)
+    if ($Code -eq $global:WTLanguage) { return }
+    if ($script:CurrentJob -or $script:TaskQueue.Count) {
+        Show-WTInfo 'Wait for the running operations to finish before changing the language.'
+        return
+    }
+    $settings.Language = $Code
+    $script:RestartRequested = $true
+    $window.Close()
 }
 
 function Select-WTPage([int]$Index) {
@@ -1030,6 +1087,7 @@ On 'BtnMin' { $window.WindowState = 'Minimized' }
 On 'BtnMax' { $window.WindowState = $(if ($window.WindowState -eq 'Maximized') { 'Normal' } else { 'Maximized' }) }
 On 'BtnClose' { $window.Close() }
 On 'BtnTheme' { Set-WTTheme $(if ($settings.Theme -eq 'Dark') { 'Light' } else { 'Dark' }) }
+On 'BtnLang' { Show-WTLanguageMenu }
 On 'BtnNavToggle' { Set-WTSidebar (-not [bool]$settings.SidebarExpanded) }
 $window.Dispatcher.Add_UnhandledException({
         param($s, $e)
@@ -1121,7 +1179,7 @@ $window.Add_PreviewKeyDown({
 foreach ($p in $script:Pages) { if ($p.Init) { . $p.Init } }
 
 $window.Add_ContentRendered({
-        Write-WTLog "$($app.Name) $($app.Version) - session started by $($identity.Name) on $env:COMPUTERNAME"
+        Write-WTLog (T '{0} {1} - session started by {2} on {3}' $app.Name $app.Version $identity.Name $env:COMPUTERNAME)
         Update-WTUserTargets
         foreach ($p in $script:Pages) { if ($p.Load) { . $p.Load } }
     })
@@ -1129,7 +1187,7 @@ $window.Add_ContentRendered({
 $window.Add_Closing({
         param($s, $e)
         if ($script:CurrentJob) {
-            $msg = "An operation is still running: $($script:CurrentJob.Title).`n`nStop it and close? The programs it started (e.g. SFC, DISM) are terminated."
+            $msg = T "An operation is still running: {0}.`n`nStop it and close? The programs it started (e.g. SFC, DISM) are terminated." $script:CurrentJob.Title
             if (-not (Show-WTConfirm $msg 'Close')) { $e.Cancel = $true; return }
             $script:TaskQueue.Clear()
             Stop-WTCurrentTask -Force
@@ -1173,7 +1231,7 @@ if ("$($settings.Window)" -match '^(-?\d+),(-?\d+),(\d+),(\d+)$') {
 }
 
 Set-WTHeaderInfo
-$ui.TxtVersion.Text = "Version $($app.Version)"
+$ui.TxtVersion.Text = T 'Version {0}' $app.Version
 $script:RepoUrl = if ($app.Repository -and $app.Repository -notlike 'OWNER/*') { "https://github.com/$($app.Repository)" } else { '' }
 # "0.9.0-beta" -> BETA badge next to the name
 $badge = if ($app.Version -match '-([A-Za-z]+)') { $Matches[1].ToUpper() } elseif ($app.Version -eq 'dev') { 'DEV' } else { '' }
@@ -1196,8 +1254,10 @@ $timer.Start()
 try {
     [void]$window.ShowDialog()
 } catch {
-    [System.Windows.MessageBox]::Show("Unexpected error:`n$($_.Exception.Message)", $app.Name, 'OK', 'Error') | Out-Null
+    [System.Windows.MessageBox]::Show((T "Unexpected error:`n{0}" $_.Exception.Message), $app.Name, 'OK', 'Error') | Out-Null
 } finally {
     $script:Pool.Close()
     $script:Pool.Dispose()
 }
+# language changed: the toolkit starts again in the same process
+if ($script:RestartRequested) { & $scriptPath }

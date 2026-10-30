@@ -28,17 +28,23 @@ function New-WTHtmlReport {
     param([string]$Notes, [string[]]$SessionLog, [int]$Days = 7)
     Write-WTLog 'Collecting data for the report...'
     $enc = { param($v) [Net.WebUtility]::HtmlEncode("$v") }
-    $s = Get-WTSystemSummary
-    $info = Get-WTSystemInfo
-    $diag = Get-WTProblemReport -Days $Days
-    $disks = @(Get-WTPhysicalDiskInfo)
-    $nets = @(Get-WTNetworkAdapterInfo | Where-Object { $_.Status -eq 'Connected' })
-    $programs = @(Get-WTInstalledProgram)
-    $startup = @(Get-WTStartupItem)
-    $admins = @(Get-WTGroupMember -GroupSid 'S-1-5-32-544')
-    $printers = @(Get-WTPrinter)
-    $updates = @()
-    try { $updates = @(Get-WTUpdateHistory -Max 15) } catch { }
+    # The report is always in English (same format in every ticket, whoever creates it):
+    # the data is collected with the interface language switched off
+    $language = $global:WTLanguage
+    $global:WTLanguage = 'en'
+    try {
+        $s = Get-WTSystemSummary
+        $info = Get-WTSystemInfo
+        $diag = Get-WTProblemReport -Days $Days
+        $disks = @(Get-WTPhysicalDiskInfo)
+        $nets = @(Get-WTNetworkAdapterInfo | Where-Object { $_.Status -eq 'Connected' })
+        $programs = @(Get-WTInstalledProgram)
+        $startup = @(Get-WTStartupItem)
+        $admins = @(Get-WTGroupMember -GroupSid 'S-1-5-32-544')
+        $printers = @(Get-WTPrinter)
+        $updates = @()
+        try { $updates = @(Get-WTUpdateHistory -Max 15) } catch { }
+    } finally { $global:WTLanguage = $language }
 
     $sections = New-Object Collections.Generic.List[string]
     $cards = @(
@@ -56,13 +62,14 @@ function New-WTHtmlReport {
 
     if ($Notes) { $sections.Add("<h2>Technician notes</h2><div class='notes'>$((& $enc $Notes) -replace "`r?`n", '<br>')</div>") }
     if ($SessionLog) {
-        $acts = @($SessionLog | Where-Object { $_ -match '\[(OK|WARN|ERROR)\s*\]|=== Start' })
+        # results and operation titles ("=== Start: ...", in the interface language)
+        $acts = @($SessionLog | Where-Object { $_ -match '\[(OK|WARN|ERROR)\s*\]|\] === ' })
         if ($acts.Count) { $sections.Add("<h2>Activities performed in this session</h2><pre>$(& $enc ($acts -join "`n"))</pre>") }
     }
     $sections.Add("<h2>Event diagnosis (last $Days days)</h2><pre>$(& $enc $diag.Report)</pre>")
     $sections.Add('<h2>Physical disks</h2>' + (ConvertTo-WTHtmlTable $disks 'Name', 'MediaType', 'SizeText', 'Health', 'Temperature', 'Wear', 'PowerOnHours' 'Disk', 'Type', 'Size', 'Status', 'Temp. °C', 'Wear %', 'Power-on hours'))
     $sections.Add('<h2>Network</h2>' + (ConvertTo-WTHtmlTable $nets 'Name', 'IP', 'Gateway', 'DNS', 'DHCP', 'MAC', 'Speed' 'Adapter', 'IP', 'Gateway', 'DNS', 'DHCP', 'MAC', 'Speed'))
-    $sections.Add('<h2>Local administrators</h2>' + (ConvertTo-WTHtmlTable $admins 'Name', 'Class', 'Source' 'Account', 'Type', 'Source'))
+    $sections.Add('<h2>Local administrators</h2>' + (ConvertTo-WTHtmlTable $admins 'Name', 'Class', 'SourceText' 'Account', 'Type', 'Source'))
     $sections.Add('<h2>Startup programs</h2>' + (ConvertTo-WTHtmlTable $startup 'Name', 'Publisher', 'Location', 'EnabledText', 'Command' 'Name', 'Publisher', 'Location', 'Enabled', 'Command'))
     $sections.Add('<h2>Printers</h2>' + (ConvertTo-WTHtmlTable $printers 'Name', 'Type', 'Driver', 'Port', 'Status' 'Name', 'Type', 'Driver', 'Port', 'Status'))
     $sections.Add('<h2>Recent updates</h2>' + (ConvertTo-WTHtmlTable $updates 'TimeText', 'Title', 'Result', 'Code' 'Date', 'Update', 'Result', 'Code'))
@@ -92,6 +99,6 @@ $($sections -join "`n")
 "@
     $file = Join-Path (Get-WTDataFolder) ('Report\Report_{0}_{1:yyyyMMdd_HHmm}.html' -f $env:COMPUTERNAME, (Get-Date))
     Set-Content -LiteralPath $file -Value $html -Encoding UTF8
-    Write-WTLog "Report created: $file" -Level OK
+    Write-WTLog (T 'Report created: {0}' $file) -Level OK
     $file
 }

@@ -1,14 +1,14 @@
 ﻿# Disk cleanup: analysis of the recoverable space and execution.
 
 $script:CleanItems = [ordered]@{
-    WinTemp        = @('Windows temporary files', 'C:\Windows\Temp', $true)
-    UserTemp       = @('Temp of all users', 'AppData\Local\Temp of every profile', $true)
-    WUCache        = @('Windows Update cache', 'Packages already downloaded (SoftwareDistribution\Download)', $true)
-    DeliveryOpt    = @('Delivery Optimization', 'Peer-to-peer cache of the updates', $true)
-    RecycleBin     = @('Recycle Bin', 'All users and all volumes', $true)
-    CrashDumps     = @('Dumps and error reports', 'MEMORY.DMP, minidumps, WER reports: deletes the evidence of BSODs!', $false)
-    BrowserCache   = @('Browser cache', 'Edge, Chrome and Firefox of all users', $false)
-    ComponentStore = @('WinSxS component store', 'DISM StartComponentCleanup (slow)', $false)
+    WinTemp        = @((T 'Windows temporary files'), 'C:\Windows\Temp', $true)
+    UserTemp       = @((T 'Temp of all users'), (T 'AppData\Local\Temp of every profile'), $true)
+    WUCache        = @((T 'Windows Update cache'), (T 'Packages already downloaded (SoftwareDistribution\Download)'), $true)
+    DeliveryOpt    = @((T 'Delivery Optimization'), (T 'Peer-to-peer cache of the updates'), $true)
+    RecycleBin     = @((T 'Recycle Bin'), (T 'All users and all volumes'), $true)
+    CrashDumps     = @((T 'Dumps and error reports'), (T 'MEMORY.DMP, minidumps, WER reports: deletes the evidence of BSODs!'), $false)
+    BrowserCache   = @((T 'Browser cache'), (T 'Edge, Chrome and Firefox of all users'), $false)
+    ComponentStore = @((T 'WinSxS component store'), (T 'DISM StartComponentCleanup (slow)'), $false)
 }
 
 function New-CleanItem {
@@ -33,7 +33,7 @@ function Show-WTCleanResult($Results, [string]$Verb) {
     foreach ($r in @($Results | Where-Object { $_ -and $_.PSObject.Properties['Target'] })) {
         $tb = $ui["CleanSize_$($r.Target)"]
         if (-not $tb) { continue }
-        if ($r.Bytes -lt 0) { $tb.Text = 'done' } else { $tb.Text = Format-WTSize $r.Bytes; $total += $r.Bytes }
+        if ($r.Bytes -lt 0) { $tb.Text = T 'done' } else { $tb.Text = Format-WTSize $r.Bytes; $total += $r.Bytes }
     }
     $ui.TxtCleanTotal.Text = "$(Format-WTSize $total) $Verb"
 }
@@ -59,7 +59,7 @@ $pageXaml = @"
         <UniformGrid x:Name="CleanGrid" Columns="2" Margin="0,0,-10,0">$cleanXaml</UniformGrid>
       </StackPanel>
     </Border>
-    <TextBlock Style="{StaticResource Hint}" Text="The Windows Update component reset is in the Windows Update section."/>
+    <TextBlock Style="{StaticResource Hint}" Text="$(TX 'The Windows Update component reset is in the Windows Update section.')"/>
   </StackPanel>
 </ScrollViewer>
 "@
@@ -71,17 +71,17 @@ Register-WTPage -Id 'Cleanup' -Group 'Repair' -Title 'Cleanup' -Glyph '&#xE74D;'
         foreach ($k in $script:CleanItems.Keys) { $ui["CleanSize_$k"].Text = '' }
         $ui.TxtCleanTotal.Text = ''
         Start-WTTask 'Analyzing recoverable space' { param($Targets) Invoke-WTCleanup -Targets $Targets -AnalyzeOnly } -Parameters @{ Targets = $t } `
-            -OnComplete { param($r) Show-WTCleanResult $r 'recoverable' }
+            -OnComplete { param($r) Show-WTCleanResult $r (T 'recoverable') }
     }
     On 'BtnCleanRun' {
         $t = Get-WTSelectedCleanTargets
         if (-not $t.Count) { Show-WTInfo 'Select at least one item.'; return }
         $names = ($t | ForEach-Object { '• ' + $script:CleanItems[$_][0] }) -join "`n"
-        if (-not (Show-WTConfirm "Clean up:`n`n$names")) { return }
+        if (-not (Show-WTConfirm (T "Clean up:`n`n{0}" $names))) { return }
         Start-WTTask 'Disk cleanup' { param($Targets, $Simulate) Invoke-WTCleanup -Targets $Targets -Simulate:$Simulate } `
             -Parameters @{ Targets = $t; Simulate = Get-WTSimulate } -OnComplete {
             param($r)
-            Show-WTCleanResult $r $(if (Get-WTSimulate) { 'recoverable' } else { 'freed' })
+            Show-WTCleanResult $r $(if (Get-WTSimulate) { T 'recoverable' } else { T 'freed' })
         }
     }
     On 'BtnCleanRecommended' { foreach ($k in $script:CleanItems.Keys) { $ui["Clean_$k"].IsChecked = [bool]$script:CleanItems[$k][2] } }

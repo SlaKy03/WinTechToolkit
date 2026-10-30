@@ -17,18 +17,18 @@ function Invoke-WTDism {
         $arguments += " /Source:$Source"
         if ($LimitAccess) { $arguments += ' /LimitAccess' }
     }
-    Write-WTLog "Running: dism.exe $arguments"
+    Write-WTLog (T 'Running: {0}' "dism.exe $arguments")
     $r = Invoke-WTProcess -FilePath "$env:windir\System32\dism.exe" -Arguments $arguments
 
     $hex = '0x{0:X8}' -f $r.ExitCode
     switch ($hex) {
-        '0x00000000' { Write-WTLog "DISM $Mode completed." -Level OK }
-        '0x800F081F' { Write-WTLog "$hex - Source files not found. Specify a source (ISO of the same build: WIM:D:\sources\install.wim:1) and enable /LimitAccess." -Level Error }
-        '0x800F0906' { Write-WTLog "$hex - Unable to download the files from Windows Update (network/proxy/WSUS). Use a local source." -Level Error }
-        '0x800F0907' { Write-WTLog "$hex - Download blocked by Group Policy (WSUS). Use a local source with /LimitAccess." -Level Error }
-        '0x800F0950' { Write-WTLog "$hex - Operation failed: check that the source matches the edition and build." -Level Error }
-        '0x00000057' { Write-WTLog "$hex - Invalid parameter (check the source format)." -Level Error }
-        default      { Write-WTLog "DISM finished with code $hex. Details in $env:windir\Logs\DISM\dism.log" -Level Error }
+        '0x00000000' { Write-WTLog (T 'DISM {0} completed.' $Mode) -Level OK }
+        '0x800F081F' { Write-WTLog (T '{0} - Source files not found. Specify a source (ISO of the same build: WIM:D:\sources\install.wim:1) and enable /LimitAccess.' $hex) -Level Error }
+        '0x800F0906' { Write-WTLog (T '{0} - Unable to download the files from Windows Update (network/proxy/WSUS). Use a local source.' $hex) -Level Error }
+        '0x800F0907' { Write-WTLog (T '{0} - Download blocked by Group Policy (WSUS). Use a local source with /LimitAccess.' $hex) -Level Error }
+        '0x800F0950' { Write-WTLog (T '{0} - Operation failed: check that the source matches the edition and build.' $hex) -Level Error }
+        '0x00000057' { Write-WTLog (T '{0} - Invalid parameter (check the source format).' $hex) -Level Error }
+        default      { Write-WTLog (T 'DISM finished with code {0}. Details in {1}' $hex "$env:windir\Logs\DISM\dism.log") -Level Error }
     }
     $r
 }
@@ -63,9 +63,9 @@ function Invoke-WTSfc {
     $repaired = @($sr | Where-Object { $_ -match 'Repairing corrupted file|Repaired file' }).Count
     $failed = @($sr | Where-Object { $_ -match 'Cannot repair member file|Could not reproject corrupted file' }).Count
     if ($failed -gt 0) {
-        Write-WTLog "SFC: $failed files could NOT be repaired. Run DISM RestoreHealth and then repeat SFC (see 'Export SFC details')." -Level Error
+        Write-WTLog (T "SFC: {0} files could NOT be repaired. Run DISM RestoreHealth and then repeat SFC (see 'SFC details')." $failed) -Level Error
     } elseif ($repaired -gt 0) {
-        Write-WTLog "SFC: $repaired files repaired. Restart and repeat SFC to confirm." -Level Warn
+        Write-WTLog (T 'SFC: {0} files repaired. Restart and repeat SFC to confirm.' $repaired) -Level Warn
     } else {
         Write-WTLog 'SFC: no repairs recorded in CBS.log.' -Level OK
     }
@@ -92,7 +92,7 @@ function Export-WTSfcDetails {
         return
     }
     Set-Content -LiteralPath $file -Value $lines -Encoding UTF8
-    Write-WTLog "Exported $($lines.Count) [SR] lines to $file" -Level OK
+    Write-WTLog (T 'Exported {0} [SR] lines to {1}' $lines.Count $file) -Level OK
     $file
 }
 
@@ -109,21 +109,21 @@ function Invoke-WTChkdsk {
         [switch]$Simulate
     )
     if ($Mode -eq 'Scan') {
-        Write-WTLog "Running: chkdsk $Drive /scan"
+        Write-WTLog (T 'Running: {0}' "chkdsk $Drive /scan")
         $r = Invoke-WTProcess -FilePath 'chkdsk.exe' -Arguments "$Drive /scan"
         switch ($r.ExitCode) {
             0 { Write-WTLog 'CHKDSK: no errors found.' -Level OK }
             1 { Write-WTLog 'CHKDSK: errors found and fixed.' -Level Warn }
             2 { Write-WTLog 'CHKDSK: disk cleanup performed, no serious errors.' -Level OK }
-            default { Write-WTLog "CHKDSK: uncorrected errors (code $($r.ExitCode)). Schedule CHKDSK at restart." -Level Error }
+            default { Write-WTLog (T 'CHKDSK: uncorrected errors (code {0}). Schedule CHKDSK at restart.' $r.ExitCode) -Level Error }
         }
         return
     }
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would schedule CHKDSK /F on $Drive at the next restart."; return }
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would schedule CHKDSK /F on {0} at the next restart.' $Drive); return }
     $r = Invoke-WTProcess -FilePath 'fsutil.exe' -Arguments "dirty set $Drive"
     if ($r.ExitCode -eq 0) {
-        Write-WTLog "CHKDSK /F will run on $Drive at the next restart." -Level OK
-        Write-WTLog "To cancel before the restart: chkntfs /x $Drive (then chkntfs /d to restore the default)."
+        Write-WTLog (T 'CHKDSK /F will run on {0} at the next restart.' $Drive) -Level OK
+        Write-WTLog (T 'To cancel before the restart: chkntfs /x {0} (then chkntfs /d to restore the default).' $Drive)
     } else {
         Write-WTLog 'Could not schedule CHKDSK.' -Level Error
     }
@@ -138,6 +138,6 @@ function Repair-WTWmi {
         if ($Simulate) { Write-WTLog '[SIMULATION] Would run winmgmt /salvagerepository'; return }
         $r = Invoke-WTProcess -FilePath 'winmgmt.exe' -Arguments '/salvagerepository'
     }
-    if ($r.ExitCode -eq 0) { Write-WTLog "WMI $Mode completed." -Level OK }
-    else { Write-WTLog "WMI $Mode finished with code $($r.ExitCode)." -Level Error }
+    if ($r.ExitCode -eq 0) { Write-WTLog (T 'WMI {0} completed.' $Mode) -Level OK }
+    else { Write-WTLog (T 'WMI {0} finished with code {1}.' $Mode $r.ExitCode) -Level Error }
 }

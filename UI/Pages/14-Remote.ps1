@@ -2,20 +2,20 @@
 
 # Id, icon, title, description, command, arguments, changes the system
 $script:RemoteActions = @(
-    @('Info', '&#xE7F4;', 'Inventory', 'Hardware, Windows, disks, network', 'Get-WTSystemInfo', @{}, $false),
-    @('Diag', '&#xE9D9;', 'Diagnose problems', 'BSODs, crashes, shutdowns and errors (7 days)', 'Get-WTProblemReport', @{ Days = 7 }, $false),
-    @('Disk', '&#xEDA2;', 'Disk health (SMART)', 'Health, temperature, wear', 'Get-WTDiskHealth', @{}, $false),
-    @('Profiles', '&#xE716;', 'User profiles', 'List with last use', 'Get-WTUserProfile', @{}, $false),
-    @('Programs', '&#xE71D;', 'Installed programs', 'Name, version, publisher', 'Get-WTInstalledProgram', @{}, $false),
-    @('Admins', '&#xE8D7;', 'Local administrators', 'Members of the Administrators group', 'Get-WTGroupMember', @{}, $false),
-    @('Updates', '&#xE895;', 'Update history', 'Results and error codes', 'Get-WTUpdateHistory', @{ Max = 40 }, $false),
-    @('CleanAn', '&#xE74D;', 'Cleanup analysis', 'Recoverable space (no changes)', 'Invoke-WTCleanup', @{ Targets = @('WinTemp', 'UserTemp', 'WUCache', 'DeliveryOpt', 'RecycleBin'); AnalyzeOnly = $true }, $false),
-    @('Clean', '&#xE74D;', 'Quick cleanup', 'Temp files, recycle bin, Windows Update cache', 'Invoke-WTCleanup', @{ Targets = @('WinTemp', 'UserTemp', 'WUCache', 'DeliveryOpt', 'RecycleBin') }, $true),
-    @('Repair', '&#xE90F;', 'Full repair', 'DISM RestoreHealth + SFC (30-60 minutes)', 'Invoke-WTFullRepair', @{}, $true),
-    @('Gpupdate', '&#xE8D7;', 'gpupdate /force', 'Refreshes Group Policy', 'Invoke-WTGpUpdate', @{ Target = 'All' }, $true),
-    @('Dns', '&#xE72C;', 'Flush DNS cache', 'ipconfig /flushdns', 'Clear-WTDnsCache', @{}, $true),
-    @('Time', '&#xE823;', 'Sync time', 'w32tm /resync', 'Sync-WTTime', @{}, $true),
-    @('Spooler', '&#xE749;', 'Reset spooler', 'Clears the stuck print queue', 'Reset-WTPrintSpooler', @{}, $true)
+    @('Info', '&#xE7F4;', (T 'Inventory'), (T 'Hardware, Windows, disks, network'), 'Get-WTSystemInfo', @{}, $false),
+    @('Diag', '&#xE9D9;', (T 'Diagnose problems'), (T 'BSODs, crashes, shutdowns and errors (7 days)'), 'Get-WTProblemReport', @{ Days = 7 }, $false),
+    @('Disk', '&#xEDA2;', (T 'Disk health (SMART)'), (T 'Health, temperature, wear'), 'Get-WTDiskHealth', @{}, $false),
+    @('Profiles', '&#xE716;', (T 'User profiles'), (T 'List with last use'), 'Get-WTUserProfile', @{}, $false),
+    @('Programs', '&#xE71D;', (T 'Installed programs'), (T 'Name, version, publisher'), 'Get-WTInstalledProgram', @{}, $false),
+    @('Admins', '&#xE8D7;', (T 'Local administrators'), (T 'Members of the Administrators group'), 'Get-WTGroupMember', @{}, $false),
+    @('Updates', '&#xE895;', (T 'Update history'), (T 'Results and error codes'), 'Get-WTUpdateHistory', @{ Max = 40 }, $false),
+    @('CleanAn', '&#xE74D;', (T 'Cleanup analysis'), (T 'Recoverable space (no changes)'), 'Invoke-WTCleanup', @{ Targets = @('WinTemp', 'UserTemp', 'WUCache', 'DeliveryOpt', 'RecycleBin'); AnalyzeOnly = $true }, $false),
+    @('Clean', '&#xE74D;', (T 'Quick cleanup'), (T 'Temp files, recycle bin, Windows Update cache'), 'Invoke-WTCleanup', @{ Targets = @('WinTemp', 'UserTemp', 'WUCache', 'DeliveryOpt', 'RecycleBin') }, $true),
+    @('Repair', '&#xE90F;', (T 'Full repair'), (T 'DISM RestoreHealth + SFC (30-60 minutes)'), 'Invoke-WTFullRepair', @{}, $true),
+    @('Gpupdate', '&#xE8D7;', 'gpupdate /force', (T 'Refreshes Group Policy'), 'Invoke-WTGpUpdate', @{ Target = 'All' }, $true),
+    @('Dns', '&#xE72C;', (T 'Flush DNS cache'), 'ipconfig /flushdns', 'Clear-WTDnsCache', @{}, $true),
+    @('Time', '&#xE823;', (T 'Sync time'), 'w32tm /resync', 'Sync-WTTime', @{}, $true),
+    @('Spooler', '&#xE749;', (T 'Reset spooler'), (T 'Clears the stuck print queue'), 'Reset-WTPrintSpooler', @{}, $true)
 )
 $script:RemoteCred = $null
 
@@ -23,7 +23,7 @@ function Get-WTRemoteTarget {
     $c = $ui.TxtRemoteHost.Text.Trim()
     if (-not $c) { Show-WTInfo 'Enter the name or address of the remote computer.'; return $null }
     if ($ui.ChkRemoteCred.IsChecked -and -not $script:RemoteCred) {
-        try { $script:RemoteCred = Get-Credential -Message "Administrator account for $c" } catch { }
+        try { $script:RemoteCred = Get-Credential -Message (T 'Administrator account for {0}' $c) } catch { }
         if (-not $script:RemoteCred) { return $null }
     }
     $c
@@ -44,13 +44,13 @@ $pageXaml = @"
       <Border Style="{StaticResource Card}">
         <StackPanel>
           <WrapPanel>
-            <TextBox x:Name="TxtRemoteHost" Style="{StaticResource SearchBox}" Width="260" Tag="Computer name or address"/>
-            <CheckBox x:Name="ChkRemoteCred" Style="{StaticResource Switch}" Content="Use a different account" Margin="6,0,10,6"/>
+            <TextBox x:Name="TxtRemoteHost" Style="{StaticResource SearchBox}" Width="260" Tag="$(TX 'Computer name or address')"/>
+            <CheckBox x:Name="ChkRemoteCred" Style="{StaticResource Switch}" Content="$(TX 'Use a different account')" Margin="6,0,10,6"/>
             $(New-Pill -Name 'BtnRemoteTest' -Glyph '&#xE703;' -Text 'Test connection' -Primary)
             $(New-Pill -Name 'BtnRemoteRdp' -Glyph '&#xE7F4;' -Text 'Remote Desktop')
             $(New-Pill -Name 'BtnRemoteMgmt' -Glyph '&#xE713;' -Text 'Computer Management')
           </WrapPanel>
-          <TextBlock Style="{StaticResource Hint}" Text="The remote PC needs WinRM enabled (Enable-PSRemoting or Group Policy) and port 5985 open. Actions in red change the system and respect simulation mode."/>
+          <TextBlock Style="{StaticResource Hint}" Text="$(TX 'The remote PC needs WinRM enabled (Enable-PSRemoting or Group Policy) and port 5985 open. Actions in red change the system and respect simulation mode.')"/>
         </StackPanel>
       </Border>
       <WrapPanel>$remoteTiles</WrapPanel>
@@ -63,7 +63,7 @@ $pageXaml = @"
           $(New-Pill -Name 'BtnRemoteCopy' -Glyph '&#xE8C8;' -Text 'Copy')
           $(New-Pill -Name 'BtnRemoteSave' -Glyph '&#xE74E;' -Text 'Save')
         </StackPanel>
-        <TextBlock x:Name="TxtRemoteTitle" Style="{StaticResource SectionTitle}" Text="Result" Margin="0,4,0,6"/>
+        <TextBlock x:Name="TxtRemoteTitle" Style="{StaticResource SectionTitle}" Text="$(TX 'Result')" Margin="0,4,0,6"/>
       </DockPanel>
       <TextBox x:Name="TxtRemoteOut" Style="{StaticResource CodeBox}" TextWrapping="NoWrap" BorderThickness="0"/>
     </DockPanel>
@@ -76,7 +76,7 @@ Register-WTPage -Id 'Remote' -Group 'Network' -Title 'Remote computer' -Glyph '&
     On 'TxtRemoteHost' -EventName 'TextChanged' { $script:RemoteCred = $null }
     On 'BtnRemoteTest' {
         $c = Get-WTRemoteTarget
-        if ($c) { Start-WTTask "Connecting to $c" { param($Computer, $Cred) $null = Test-WTRemote -ComputerName $Computer -Credential $Cred } -Parameters @{ Computer = $c; Cred = $script:RemoteCred } }
+        if ($c) { Start-WTTask (T 'Connecting to {0}' $c) { param($Computer, $Cred) $null = Test-WTRemote -ComputerName $Computer -Credential $Cred } -Parameters @{ Computer = $c; Cred = $script:RemoteCred } }
     }
     On 'BtnRemoteRdp' { $c = $ui.TxtRemoteHost.Text.Trim(); if ($c) { Start-Process mstsc.exe -ArgumentList "/v:$c" } }
     On 'BtnRemoteMgmt' { $c = $ui.TxtRemoteHost.Text.Trim(); if ($c) { Start-Process compmgmt.msc -ArgumentList "/computer:$c" } }
@@ -88,15 +88,15 @@ Register-WTPage -Id 'Remote' -Group 'Network' -Title 'Remote computer' -Glyph '&
             if (-not $c) { return }
             $arguments = $a[5].Clone()
             if ($a[6]) {
-                if (-not (Show-WTConfirm "Run '$($a[2])' on $c?")) { return }
+                if (-not (Show-WTConfirm (T "Run '{0}' on {1}?" $a[2] $c))) { return }
                 if (Get-WTSimulate) {
-                    Write-WTLog "[SIMULATION] Would run $($a[4]) on $c" -Level Warn
+                    Write-WTLog (T '[SIMULATION] Would run {0} on {1}' $a[4] $c) -Level Warn
                     return
                 }
             }
             $ui.TxtRemoteTitle.Text = "$($a[2]) - $c"
-            $ui.TxtRemoteOut.Text = 'Running...'
-            Start-WTTask "$($a[2]) on $c" {
+            $ui.TxtRemoteOut.Text = T 'Running...'
+            Start-WTTask (T '{0} on {1}' $a[2] $c) {
                 param($Computer, $Command, $Arguments, $Cred)
                 Format-WTRemoteOutput (Invoke-WTRemote -ComputerName $Computer -Command $Command -Arguments $Arguments -Credential $Cred)
             } -Parameters @{ Computer = $c; Command = $a[4]; Arguments = $arguments; Cred = $script:RemoteCred } -OnComplete {
@@ -111,7 +111,7 @@ Register-WTPage -Id 'Remote' -Group 'Network' -Title 'Remote computer' -Glyph '&
         $name = ($ui.TxtRemoteTitle.Text -replace '[\\/:*?"<>| ]+', '_')
         $file = Join-Path $dataDir ('Report\Remote_{0}_{1:yyyyMMdd_HHmm}.txt' -f $name, (Get-Date))
         Set-Content -LiteralPath $file -Value $ui.TxtRemoteOut.Text -Encoding UTF8
-        Write-WTLog "Result saved to $file" -Level OK
+        Write-WTLog (T 'Result saved to {0}' $file) -Level OK
         Start-Process notepad.exe -ArgumentList "`"$file`""
     }
 }

@@ -3,15 +3,15 @@
 function Get-WTInstalledProgram {
     <# Installed programs (HKLM 64/32 bit + HKCU of users whose hive is loaded). #>
     $sources = New-Object Collections.Generic.List[object]
-    $sources.Add(@{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'; Scope = 'Computer (64-bit)' })
-    $sources.Add(@{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'; Scope = 'Computer (32-bit)' })
+    $sources.Add(@{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'; Scope = (T 'Computer (64-bit)') })
+    $sources.Add(@{ Key = 'HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'; Scope = (T 'Computer (32-bit)') })
     foreach ($h in Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue) {
         if ($h.PSChildName -notmatch '^S-1-(5-21|12-1)-[\d-]+$') { continue }
         $n = Resolve-WTSidName $h.PSChildName
         if (-not $n) { $n = $h.PSChildName }
         # local accounts without the computer name ("User mario" instead of "User PC01\mario")
         $n = $n -replace "^$([regex]::Escape($env:COMPUTERNAME))\\", ''
-        $sources.Add(@{ Key = "HKEY_USERS\$($h.PSChildName)\Software\Microsoft\Windows\CurrentVersion\Uninstall"; Scope = "User $n" })
+        $sources.Add(@{ Key = "HKEY_USERS\$($h.PSChildName)\Software\Microsoft\Windows\CurrentVersion\Uninstall"; Scope = (T 'User {0}' $n) })
     }
 
     $list = New-Object Collections.Generic.List[object]
@@ -91,7 +91,7 @@ function Uninstall-WTProgram {
     #>
     param([Parameter(Mandatory)]$Program, [switch]$Silent, [switch]$Simulate)
     $name = $Program.DisplayName
-    Write-WTLog "Uninstalling: $name $($Program.Version)"
+    Write-WTLog (T 'Uninstalling: {0}' ("$name $($Program.Version)".Trim()))
     $fail = [pscustomobject]@{ Program = $name; ExitCode = -1; Success = $false }
 
     if ($Program.ProductCode -and $Program.InstallerType -eq 'MSI') {
@@ -103,7 +103,7 @@ function Uninstall-WTProgram {
         $cmd = $Program.UninstallString
         $usedQuiet = $false
         if ($Silent -and $Program.QuietUninstallString) { $cmd = $Program.QuietUninstallString; $usedQuiet = $true }
-        if (-not $cmd) { Write-WTLog 'No uninstall string: use "Find leftovers" to remove the entry.' -Level Error; return $fail }
+        if (-not $cmd) { Write-WTLog 'No uninstall string: use "Find leftovers of selected" to remove the entry.' -Level Error; return $fail }
         $parts = Split-WTCommandLine ([Environment]::ExpandEnvironmentVariables($cmd))
         $exe = $parts[0]
         $arguments = $parts[1]
@@ -111,23 +111,23 @@ function Uninstall-WTProgram {
             $sw = Get-WTSilentSwitch -ExePath $exe
             if ($sw) {
                 if ($arguments -notmatch [regex]::Escape($sw.Split(' ')[0])) { $arguments = "$arguments $sw".Trim() }
-                Write-WTLog "Silent switch detected: $sw"
+                Write-WTLog (T 'Silent switch detected: {0}' $sw)
             } else {
                 Write-WTLog 'Silent switch not recognized: the interactive uninstaller will be started.' -Level Warn
             }
         }
         if ([IO.Path]::IsPathRooted($exe) -and -not (Test-Path -LiteralPath $exe)) {
-            Write-WTLog "Uninstaller not found ($exe): orphan entry, use 'Find leftovers'." -Level Error
+            Write-WTLog (T "Uninstaller not found ({0}): orphan entry, use 'Find leftovers of selected'." $exe) -Level Error
             return $fail
         }
     }
 
     if ($Simulate) {
-        Write-WTLog "[SIMULATION] Would run: `"$exe`" $arguments"
+        Write-WTLog (T '[SIMULATION] Would run: {0}' "`"$exe`" $arguments")
         return [pscustomobject]@{ Program = $name; ExitCode = 0; Success = $true }
     }
 
-    Write-WTLog "Running: `"$exe`" $arguments"
+    Write-WTLog (T 'Running: {0}' "`"$exe`" $arguments")
     try {
         $sp = @{ FilePath = $exe; PassThru = $true; ErrorAction = 'Stop' }
         if ($arguments) { $sp.ArgumentList = $arguments }
@@ -136,7 +136,7 @@ function Uninstall-WTProgram {
         $proc.WaitForExit()
         $code = $proc.ExitCode
     } catch {
-        Write-WTLog "Start failed: $($_.Exception.Message)" -Level Error
+        Write-WTLog (T 'Start failed: {0}' $_.Exception.Message) -Level Error
         return $fail
     }
 
@@ -161,12 +161,12 @@ function Uninstall-WTProgram {
         1605 { Write-WTLog 'Product not installed (orphan entry).' -Level Warn }
         1602 { Write-WTLog 'Uninstall cancelled by the user.' -Level Warn }
         1618 { Write-WTLog 'Another installation is in progress: try again later.' -Level Error }
-        default { Write-WTLog "Exit code: $code" -Level Warn }
+        default { Write-WTLog (T 'Exit code: {0}' $code) -Level Warn }
     }
     if ($stillThere) {
         Write-WTLog 'The uninstall entry is still present (uninstall not completed or leftover entry).' -Level Warn
     } else {
-        Write-WTLog "$name uninstalled." -Level OK
+        Write-WTLog (T '{0} uninstalled.' $name) -Level OK
     }
     [pscustomobject]@{ Program = $name; ExitCode = $code; Success = -not $stillThere }
 }
@@ -237,7 +237,7 @@ function Find-WTProgramResidue {
     #>
     param([Parameter(Mandatory)]$Program)
     $name = $Program.DisplayName
-    Write-WTLog "Searching for leftovers of: $name"
+    Write-WTLog (T 'Searching for leftovers of: {0}' $name)
 
     $profiles = @(Get-WTProfileFolders)
     $installed = @(Get-WTInstalledProgram)
@@ -256,18 +256,21 @@ function Find-WTProgramResidue {
 
     $variants = @()
     foreach ($v in (Get-WTNameVariants -DisplayName $name -Publisher $Program.Publisher)) {
-        if ($otherNames.Contains($v)) { Write-WTLog "  Name '$v' excluded: also used by another installed program." }
+        if ($otherNames.Contains($v)) { Write-WTLog (T "  Name '{0}' excluded: also used by another installed program." $v) }
         else { $variants += $v }
     }
     $pubVariants = @(Get-WTPublisherVariants -Publisher $Program.Publisher)
-    Write-WTLog ('  Names searched: {0}' -f $(if ($variants) { $variants -join ' | ' } else { '(none)' }))
-    if ($pubVariants) { Write-WTLog ('  Publisher: {0}' -f ($pubVariants -join ' | ')) }
+    Write-WTLog (T '  Names searched: {0}' $(if ($variants) { $variants -join ' | ' } else { T '(none)' }))
+    if ($pubVariants) { Write-WTLog (T '  Publisher: {0}' ($pubVariants -join ' | ')) }
 
     $found = New-Object Collections.Generic.List[object]
     $seen = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    # Type: Folder, Shortcut, Registry, Service or Scheduled task (used by Remove-WTResidue),
+    # TypeText: shown in the table
+    $typeText = @{ Folder = (T 'Folder'); Shortcut = (T 'Shortcut'); Registry = (T 'Registry'); Service = (T 'Service'); 'Scheduled task' = (T 'Scheduled task') }
     function Add-Residue([string]$Type, [string]$Path, [string]$Reason) {
         if ($seen.Add("$Type|$Path")) {
-            $found.Add([pscustomobject]@{ Type = $Type; Path = $Path; Reason = $Reason; Program = $name; SizeBytes = [int64]0; SizeText = '' })
+            $found.Add([pscustomobject]@{ Type = $Type; TypeText = $typeText[$Type]; Path = $Path; Reason = $Reason; Program = $name; SizeBytes = [int64]0; SizeText = '' })
         }
     }
     function Test-FolderCandidate([string]$Path) {
@@ -276,14 +279,14 @@ function Find-WTProgramResidue {
         $true
     }
     function Get-RootLabel([string]$Root) {
-        foreach ($pr in $profiles) { if ($Root.StartsWith($pr + '\', [StringComparison]::OrdinalIgnoreCase)) { return "user data $(Split-Path $pr -Leaf)" } }
+        foreach ($pr in $profiles) { if ($Root.StartsWith($pr + '\', [StringComparison]::OrdinalIgnoreCase)) { return T 'user data {0}' (Split-Path $pr -Leaf) } }
         Split-Path $Root -Leaf
     }
 
     # --- 1. Install folder and uninstaller folder -----------------------------------
     $loc = $Program.InstallLocation
     if ($loc -and (Test-Path -LiteralPath $loc -PathType Container) -and (Test-FolderCandidate $loc)) {
-        Add-Residue 'Folder' $loc 'Install folder (InstallLocation)'
+        Add-Residue 'Folder' $loc (T 'Install folder (InstallLocation)')
     }
 
     $roots = New-Object Collections.Generic.List[string]
@@ -299,7 +302,7 @@ function Find-WTProgramResidue {
             if ($exeDir -and (Test-Path -LiteralPath $exeDir)) {
                 $parent = Split-Path $exeDir -Parent
                 if (($roots -contains $parent -or $variants -contains (Split-Path $exeDir -Leaf)) -and (Test-FolderCandidate $exeDir)) {
-                    Add-Residue 'Folder' $exeDir 'Uninstaller folder'
+                    Add-Residue 'Folder' $exeDir (T 'Uninstaller folder')
                 }
             }
         }
@@ -311,19 +314,19 @@ function Find-WTProgramResidue {
         $label = Get-RootLabel $root
         foreach ($v in $variants) {
             $c = Join-Path $root $v
-            if ((Test-Path -LiteralPath $c -PathType Container) -and (Test-FolderCandidate $c)) { Add-Residue 'Folder' $c "Name '$v' ($label)" }
+            if ((Test-Path -LiteralPath $c -PathType Container) -and (Test-FolderCandidate $c)) { Add-Residue 'Folder' $c (T "Name '{0}' ({1})" $v $label) }
         }
         foreach ($pv in $pubVariants) {
             $pd = Join-Path $root $pv
             if (-not (Test-Path -LiteralPath $pd -PathType Container)) { continue }
             foreach ($v in $variants) {
                 $c = Join-Path $pd $v
-                if ((Test-Path -LiteralPath $c -PathType Container) -and (Test-FolderCandidate $c)) { Add-Residue 'Folder' $c "Publisher's folder '$v' ($label)" }
+                if ((Test-Path -LiteralPath $c -PathType Container) -and (Test-FolderCandidate $c)) { Add-Residue 'Folder' $c (T "Publisher's folder '{0}' ({1})" $v $label) }
             }
             # publisher folder only if it would be left empty
             $children = @(Get-ChildItem -LiteralPath $pd -Force -ErrorAction SilentlyContinue)
             $leftover = @($children | Where-Object { -not $seen.Contains("Folder|$($_.FullName)") })
-            if ($leftover.Count -eq 0 -and (Test-FolderCandidate $pd)) { Add-Residue 'Folder' $pd "Publisher folder, empty after cleanup ($label)" }
+            if ($leftover.Count -eq 0 -and (Test-FolderCandidate $pd)) { Add-Residue 'Folder' $pd (T 'Publisher folder, empty after cleanup ({0})' $label) }
         }
     }
 
@@ -339,7 +342,7 @@ function Find-WTProgramResidue {
             if (Test-Path -LiteralPath $c -PathType Container) {
                 $inside = @(Get-ChildItem -LiteralPath $c -Recurse -Force -File -ErrorAction SilentlyContinue)
                 if ($variants -contains $v -or -not ($inside | Where-Object { $_.Extension -ne '.lnk' -and $_.Name -ne 'desktop.ini' })) {
-                    Add-Residue 'Folder' $c 'Start menu folder'
+                    Add-Residue 'Folder' $c (T 'Start menu folder')
                 }
             }
         }
@@ -357,7 +360,7 @@ function Find-WTProgramResidue {
             if (-not $match -and $target) {
                 foreach ($dd in $dirs) { if (Test-WTPathRelated $target $dd) { $match = $true; break } }
             }
-            if ($match) { Add-Residue 'Shortcut' $f.FullName "Shortcut to: $target" }
+            if ($match) { Add-Residue 'Shortcut' $f.FullName (T 'Shortcut to: {0}' $target) }
         }
         [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
     }
@@ -370,24 +373,24 @@ function Find-WTProgramResidue {
     foreach ($rr in $regRoots) {
         foreach ($v in $variants) {
             $k = "$rr\$v"
-            if (Test-Path -LiteralPath "Registry::$k") { Add-Residue 'Registry' $k "Key '$v'" }
+            if (Test-Path -LiteralPath "Registry::$k") { Add-Residue 'Registry' $k (T "Key '{0}'" $v) }
         }
         foreach ($pv in $pubVariants) {
             $pk = "$rr\$pv"
             if (-not (Test-Path -LiteralPath "Registry::$pk")) { continue }
             foreach ($v in $variants) {
                 $k = "$pk\$v"
-                if (Test-Path -LiteralPath "Registry::$k") { Add-Residue 'Registry' $k "Publisher's key '$v'" }
+                if (Test-Path -LiteralPath "Registry::$k") { Add-Residue 'Registry' $k (T "Publisher's key '{0}'" $v) }
             }
             $item = Get-Item -LiteralPath "Registry::$pk" -ErrorAction SilentlyContinue
             if ($item -and $item.ValueCount -eq 0) {
                 $left = @($item.GetSubKeyNames() | Where-Object { -not $seen.Contains("Registry|$pk\$_") })
-                if ($left.Count -eq 0) { Add-Residue 'Registry' $pk 'Publisher key, empty after cleanup' }
+                if ($left.Count -eq 0) { Add-Residue 'Registry' $pk (T 'Publisher key, empty after cleanup') }
             }
         }
     }
     if ($Program.RegistryKey -and (Test-Path -LiteralPath "Registry::$($Program.RegistryKey)")) {
-        Add-Residue 'Registry' $Program.RegistryKey 'Uninstall entry (Apps & features)'
+        Add-Residue 'Registry' $Program.RegistryKey (T 'Uninstall entry (Apps & features)')
     }
     if ($Program.ProductCode) {
         $packed = Convert-WTGuidToPacked $Program.ProductCode
@@ -396,7 +399,7 @@ function Find-WTProgramResidue {
                     "HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Installer\Products\$packed",
                     "HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Installer\Features\$packed",
                     "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products\$packed")) {
-                if (Test-Path -LiteralPath "Registry::$k") { Add-Residue 'Registry' $k 'Windows Installer (MSI) registration' }
+                if (Test-Path -LiteralPath "Registry::$k") { Add-Residue 'Registry' $k (T 'Windows Installer (MSI) registration') }
             }
         }
     }
@@ -410,7 +413,7 @@ function Find-WTProgramResidue {
         $match = $false
         foreach ($d in $dirs) { if ($pn.IndexOf($d + '\', $cmp) -ge 0) { $match = $true; break } }
         if (-not $match -and ($variants -contains $svc.Name -or $variants -contains $svc.DisplayName) -and $pn.IndexOf($env:windir, $cmp) -lt 0) { $match = $true }
-        if ($match) { Add-Residue 'Service' $svc.Name "Service '$($svc.DisplayName)' - $pn" }
+        if ($match) { Add-Residue 'Service' $svc.Name (T "Service '{0}' - {1}" $svc.DisplayName $pn) }
     }
     try { $tasks = @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskPath -notlike '\Microsoft\*' }) } catch { $tasks = @() }
     foreach ($t in $tasks) {
@@ -422,7 +425,7 @@ function Find-WTProgramResidue {
                 if ($v.Length -ge 4 -and ($t.TaskName.IndexOf($v, $cmp) -ge 0 -or $t.TaskName.IndexOf(($v -replace '\s', ''), $cmp) -ge 0)) { $match = $true; break }
             }
         }
-        if ($match) { Add-Residue 'Scheduled task' "$($t.TaskPath)$($t.TaskName)" "Runs: $exec" }
+        if ($match) { Add-Residue 'Scheduled task' "$($t.TaskPath)$($t.TaskName)" (T 'Runs: {0}' $exec) }
     }
 
     # --- Sizes and summary --------------------------------------------------------------
@@ -431,9 +434,9 @@ function Find-WTProgramResidue {
     }
     if ($found.Count) {
         $tot = ($found | Measure-Object SizeBytes -Sum).Sum
-        Write-WTLog "Found $($found.Count) leftovers for $name ($(Format-WTSize $tot)). Review them before deleting." -Level Warn
+        Write-WTLog (T 'Found {0} leftovers for {1} ({2}). Review them before deleting.' $found.Count $name (Format-WTSize $tot)) -Level Warn
     } else {
-        Write-WTLog "No leftovers found for $name." -Level OK
+        Write-WTLog (T 'No leftovers found for {0}.' $name) -Level OK
     }
     $found
 }
@@ -456,34 +459,34 @@ function Remove-WTResidue {
         $ok = $true
         switch ($r.Type) {
             'Service' {
-                if ($Simulate) { Write-WTLog "[SIMULATION] Would stop and delete service $($r.Path)"; break }
+                if ($Simulate) { Write-WTLog (T '[SIMULATION] Would stop and delete service {0}' $r.Path); break }
                 Stop-Service -Name $r.Path -Force -ErrorAction SilentlyContinue
                 & sc.exe delete "$($r.Path)" 2>&1 | Out-Null
-                if ($LASTEXITCODE -eq 0) { Write-WTLog "Service deleted: $($r.Path)" -Level OK }
-                elseif ($LASTEXITCODE -eq 1072) { Write-WTLog "Service $($r.Path) marked for deletion (completed at restart)." -Level Warn }
-                else { Write-WTLog "Could not delete service $($r.Path) (code $LASTEXITCODE)." -Level Error; $ok = $false }
+                if ($LASTEXITCODE -eq 0) { Write-WTLog (T 'Service deleted: {0}' $r.Path) -Level OK }
+                elseif ($LASTEXITCODE -eq 1072) { Write-WTLog (T 'Service {0} marked for deletion (completed at restart).' $r.Path) -Level Warn }
+                else { Write-WTLog (T 'Could not delete service {0} (code {1}).' $r.Path $LASTEXITCODE) -Level Error; $ok = $false }
             }
             'Scheduled task' {
                 $i = $r.Path.LastIndexOf('\')
                 $tp = $r.Path.Substring(0, $i + 1); $tn = $r.Path.Substring($i + 1)
-                if ($Simulate) { Write-WTLog "[SIMULATION] Would delete task $($r.Path)"; break }
+                if ($Simulate) { Write-WTLog (T '[SIMULATION] Would delete task {0}' $r.Path); break }
                 try {
                     Unregister-ScheduledTask -TaskName $tn -TaskPath $tp -Confirm:$false -ErrorAction Stop
-                    Write-WTLog "Task deleted: $($r.Path)" -Level OK
-                } catch { Write-WTLog "Could not delete task $($r.Path): $($_.Exception.Message)" -Level Error; $ok = $false }
+                    Write-WTLog (T 'Task deleted: {0}' $r.Path) -Level OK
+                } catch { Write-WTLog (T 'Could not delete task {0}: {1}' $r.Path $_.Exception.Message) -Level Error; $ok = $false }
             }
             'Shortcut' {
-                if ($Simulate) { Write-WTLog "[SIMULATION] Would delete shortcut $($r.Path)"; break }
+                if ($Simulate) { Write-WTLog (T '[SIMULATION] Would delete shortcut {0}' $r.Path); break }
                 try {
                     Remove-Item -LiteralPath $r.Path -Force -ErrorAction Stop
-                    Write-WTLog "Shortcut deleted: $($r.Path)" -Level OK
-                } catch { if (Test-Path -LiteralPath $r.Path) { Write-WTLog "Could not delete $($r.Path)" -Level Error; $ok = $false } }
+                    Write-WTLog (T 'Shortcut deleted: {0}' $r.Path) -Level OK
+                } catch { if (Test-Path -LiteralPath $r.Path) { Write-WTLog (T 'Could not delete {0}' $r.Path) -Level Error; $ok = $false } }
             }
             'Folder' {
                 if (-not $Simulate) {
                     foreach ($proc in Get-Process -ErrorAction SilentlyContinue) {
                         if ($proc.Path -and $proc.Path.StartsWith($r.Path + '\', $cmp)) {
-                            Write-WTLog "Closing process in use: $($proc.ProcessName) (PID $($proc.Id))" -Level Warn
+                            Write-WTLog (T 'Closing process in use: {0} (PID {1})' $proc.ProcessName $proc.Id) -Level Warn
                             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
                         }
                     }
@@ -497,7 +500,7 @@ function Remove-WTResidue {
     }
     if (-not $Simulate) {
         $done = @($sorted).Count - $failed.Count
-        Write-WTLog "Leftovers removed: $done, not removed: $($failed.Count)." -Level $(if ($failed.Count) { 'Warn' } else { 'OK' })
+        Write-WTLog (T 'Leftovers removed: {0}, not removed: {1}.' $done $failed.Count) -Level $(if ($failed.Count) { 'Warn' } else { 'OK' })
     }
     $failed
 }

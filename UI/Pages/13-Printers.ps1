@@ -7,7 +7,7 @@ function Update-WTPrinters {
         param($r)
         $rows = @($r | Where-Object { $_ -and $_.PSObject.Properties['Driver'] })
         $ui.GridPrinters.ItemsSource = $rows
-        $ui.TxtPrinterCount.Text = "$($rows.Count) printers"
+        $ui.TxtPrinterCount.Text = T '{0} printers' $rows.Count
     }
 }
 
@@ -34,7 +34,7 @@ $pageXaml = @"
       $(New-Pill -Name 'BtnPrinterRemove' -Glyph '&#xE74D;' -Text 'Remove selected' -Danger)
       $(New-Pill -Name 'BtnSpooler' -Glyph '&#xE72C;' -Text 'Reset spooler' -ToolTip 'Stops the spooler, empties the PRINTERS folder and starts it again')
       $(New-Pill -Name 'BtnPrinterDrivers' -Glyph '&#xE7BA;' -Text 'Remove unused drivers')
-      <TextBlock x:Name="TxtPrinterCount" Style="{StaticResource Counter}" Text="Loading..."/>
+      <TextBlock x:Name="TxtPrinterCount" Style="{StaticResource Counter}" Text="$(TX 'Loading...')"/>
     </WrapPanel>
   </Border>
   <DataGrid x:Name="GridPrinters" Grid.Row="2">
@@ -48,30 +48,30 @@ $pageXaml = @"
     </DataGrid.RowStyle>
     <DataGrid.ContextMenu>
       <ContextMenu>
-        <MenuItem x:Name="CmPrinterQueue" Header="Open the print queue"/>
-        <MenuItem x:Name="CmPrinterProps" Header="Printer properties"/>
-        <MenuItem x:Name="CmPrinterCopy" Header="Copy name"/>
+        <MenuItem x:Name="CmPrinterQueue" Header="$(TX 'Open the print queue')"/>
+        <MenuItem x:Name="CmPrinterProps" Header="$(TX 'Printer properties')"/>
+        <MenuItem x:Name="CmPrinterCopy" Header="$(TX 'Copy name')"/>
       </ContextMenu>
     </DataGrid.ContextMenu>
     <DataGrid.Columns>
-      <DataGridTextColumn Header="Name" Binding="{Binding Name, Mode=OneWay}" Width="2*"/>
-      <DataGridTextColumn Header="Status" Binding="{Binding Status, Mode=OneWay}" Width="100"/>
-      <DataGridTextColumn Header="Queued" Binding="{Binding Jobs, Mode=OneWay}" Width="65"/>
-      <DataGridTextColumn Header="Type" Binding="{Binding Type, Mode=OneWay}" Width="140"/>
+      <DataGridTextColumn Header="$(TX 'Name')" Binding="{Binding Name, Mode=OneWay}" Width="2*"/>
+      <DataGridTextColumn Header="$(TX 'Status')" Binding="{Binding StatusText, Mode=OneWay}" SortMemberPath="Status" Width="100"/>
+      <DataGridTextColumn Header="$(TX 'Queued')" Binding="{Binding Jobs, Mode=OneWay}" Width="65"/>
+      <DataGridTextColumn Header="$(TX 'Type')" Binding="{Binding Type, Mode=OneWay}" Width="140"/>
       <DataGridTextColumn Header="Driver" Binding="{Binding Driver, Mode=OneWay}" Width="2*"/>
-      <DataGridTextColumn Header="Port" Binding="{Binding Port, Mode=OneWay}" Width="*"/>
-      <DataGridTextColumn Header="Shared" Binding="{Binding Shared, Mode=OneWay}" Width="75"/>
+      <DataGridTextColumn Header="$(TX 'Port')" Binding="{Binding Port, Mode=OneWay}" Width="*"/>
+      <DataGridTextColumn Header="$(TX 'Shared')" Binding="{Binding Shared, Mode=OneWay}" Width="75"/>
     </DataGrid.Columns>
   </DataGrid>
   <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,10,0,0">
     <StackPanel>
-      <TextBlock Style="{StaticResource SectionTitle}" Text="Connect a shared printer"/>
+      <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Connect a shared printer')"/>
       <WrapPanel>
-        <TextBox x:Name="TxtPrinterPath" Style="{StaticResource SearchBox}" Width="320" Tag="\\server\printer"/>
-        <RadioButton x:Name="PrnScopeMachine" Style="{StaticResource Chip}" GroupName="PrnScope" Content="All users" IsChecked="True"
-                     ToolTip="printui /ga: the printer appears for every user from the next sign-in"/>
-        <RadioButton x:Name="PrnScopeUser" Style="{StaticResource Chip}" GroupName="PrnScope" Content="Selected user only"
-                     ToolTip="Connected right away in the session of the signed-in user"/>
+        <TextBox x:Name="TxtPrinterPath" Style="{StaticResource SearchBox}" Width="320" Tag="$(TX '\\server\printer')"/>
+        <RadioButton x:Name="PrnScopeMachine" Style="{StaticResource Chip}" GroupName="PrnScope" Content="$(TX 'All users')" IsChecked="True"
+                     ToolTip="$(TX 'printui /ga: the printer appears for every user from the next sign-in')"/>
+        <RadioButton x:Name="PrnScopeUser" Style="{StaticResource Chip}" GroupName="PrnScope" Content="$(TX 'Selected user only')"
+                     ToolTip="$(TX 'Connected right away in the session of the signed-in user')"/>
         $(New-Pill -Name 'BtnPrinterAdd' -Glyph '&#xE710;' -Text 'Connect' -Primary)
       </WrapPanel>
       <WrapPanel x:Name="UsersPrinter" Margin="0,4,0,0"/>
@@ -95,7 +95,7 @@ Register-WTPage -Id 'Printers' -Group 'Network' -Title 'Printers' -Glyph '&#xE74
     On 'BtnPrinterRemove' {
         $n = Get-WTSelectedPrinterNames
         if (-not $n.Count) { return }
-        if (-not (Show-WTConfirm ("Remove the selected printers?`n`n" + (($n | ForEach-Object { "• $_" }) -join "`n")))) { return }
+        if (-not (Show-WTConfirm ((T "Remove the selected printers?`n`n") + (($n | ForEach-Object { "• $_" }) -join "`n")))) { return }
         Start-WTTask 'Removing printers' { param($Names, $Simulate) Remove-WTPrinter -Name $Names -Simulate:$Simulate } `
             -Parameters @{ Names = $n; Simulate = Get-WTSimulate } -OnComplete { Update-WTPrinters }
     }
@@ -116,7 +116,7 @@ Register-WTPage -Id 'Printers' -Group 'Network' -Title 'Printers' -Glyph '&#xE74
             if (-not $u) { return }
             $scope = 'User'; $user = $u.UserName
         }
-        Start-WTTask "Connect $path" { param($Path, $Scope, $User, $Simulate) Add-WTNetworkPrinter -Path $Path -Scope $Scope -UserName $User -Simulate:$Simulate } `
+        Start-WTTask (T 'Connect {0}' $path) { param($Path, $Scope, $User, $Simulate) Add-WTNetworkPrinter -Path $Path -Scope $Scope -UserName $User -Simulate:$Simulate } `
             -Parameters @{ Path = $path; Scope = $scope; User = $user; Simulate = Get-WTSimulate } -OnComplete { Update-WTPrinters }
     }
     On 'PrnScopeUser' -EventName 'Checked' { $ui.UsersPrinter.Visibility = 'Visible' }

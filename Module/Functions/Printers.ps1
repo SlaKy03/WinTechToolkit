@@ -1,18 +1,26 @@
 ﻿# Printers: list, network connections, queues, unused drivers.
 
 function Get-WTPrinter {
+    # Status: Ready, Offline, Error... (row colours), StatusText: shown in the table
     $status = @{ Normal = 'Ready'; Offline = 'Offline'; Error = 'Error'; PaperOut = 'Out of paper'; PaperJam = 'Paper jam'; Paused = 'Paused'; Busy = 'Busy'; Printing = 'Printing' }
+    $statusText = @{
+        Normal = (T 'Ready'); Offline = (T 'Offline'); Error = (T 'Error'); PaperOut = (T 'Out of paper'); PaperJam = (T 'Paper jam')
+        Paused = (T 'Paused'); Busy = (T 'Busy'); Printing = (T 'Printing')
+    }
     foreach ($p in Get-Printer -ErrorAction SilentlyContinue | Sort-Object Name) {
         $st = $status["$($p.PrinterStatus)"]
         if (-not $st) { $st = "$($p.PrinterStatus)" }
+        $stText = $statusText["$($p.PrinterStatus)"]
+        if (-not $stText) { $stText = $st }
         [pscustomobject]@{
-            Name   = $p.Name
-            Type   = $(if ($p.Type -eq 'Connection') { 'Network connection' } else { 'Local' })
-            Driver = $p.DriverName
-            Port   = $p.PortName
-            Shared = Format-WTBool $p.Shared
-            Status = $st
-            Jobs   = @(Get-PrintJob -PrinterName $p.Name -ErrorAction SilentlyContinue).Count
+            Name       = $p.Name
+            Type       = $(if ($p.Type -eq 'Connection') { T 'Network connection' } else { T 'Local' })
+            Driver     = $p.DriverName
+            Port       = $p.PortName
+            Shared     = Format-WTBool $p.Shared
+            Status     = $st
+            StatusText = $stText
+            Jobs       = @(Get-PrintJob -PrinterName $p.Name -ErrorAction SilentlyContinue).Count
         }
     }
 }
@@ -30,12 +38,15 @@ function Add-WTNetworkPrinter {
         [string]$UserName,
         [switch]$Simulate
     )
-    if ($Path -notmatch '^\\\\[^\\]+\\.+') { Write-WTLog "Invalid path: use the format \\server\printer" -Level Error; return }
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would connect $Path ($Scope)"; return }
+    if ($Path -notmatch '^\\\\[^\\]+\\.+') { Write-WTLog 'Invalid path: use the format \\server\printer' -Level Error; return }
+    if ($Simulate) {
+        if ($Scope -eq 'Machine') { Write-WTLog (T '[SIMULATION] Would connect {0} for all users' $Path) } else { Write-WTLog (T '[SIMULATION] Would connect {0} for {1}' $Path $UserName) }
+        return
+    }
     if ($Scope -eq 'Machine') {
         $r = Invoke-WTProcess -FilePath 'rundll32.exe' -Arguments "printui.dll,PrintUIEntry /ga /n`"$Path`""
         Restart-Service -Name Spooler -Force -ErrorAction SilentlyContinue
-        if ($r.ExitCode -eq 0) { Write-WTLog "Printer $Path connected for all users (visible at the next sign-in)." -Level OK }
+        if ($r.ExitCode -eq 0) { Write-WTLog (T 'Printer {0} connected for all users (visible at the next sign-in).' $Path) -Level OK }
         return
     }
     if (-not $UserName) { Write-WTLog 'No signed-in user.' -Level Error; return }
@@ -47,17 +58,17 @@ function Add-WTNetworkPrinter {
 function Remove-WTPrinter {
     param([Parameter(Mandatory)][string[]]$Name, [switch]$Simulate)
     foreach ($n in $Name) {
-        if ($Simulate) { Write-WTLog "[SIMULATION] Would remove printer $n"; continue }
+        if ($Simulate) { Write-WTLog (T '[SIMULATION] Would remove printer {0}' $n); continue }
         if ($n -like '\\*') {
             # possible per-machine connection created with /ga
             Invoke-WTProcess -FilePath 'rundll32.exe' -Arguments "printui.dll,PrintUIEntry /gd /n`"$n`"" -NoLog | Out-Null
         }
         try {
             Remove-Printer -Name $n -ErrorAction Stop
-            Write-WTLog "Printer removed: $n" -Level OK
+            Write-WTLog (T 'Printer removed: {0}' $n) -Level OK
         } catch {
-            if (Get-Printer -Name $n -ErrorAction SilentlyContinue) { Write-WTLog "Could not remove $n : $($_.Exception.Message)" -Level Error }
-            else { Write-WTLog "Printer removed: $n" -Level OK }
+            if (Get-Printer -Name $n -ErrorAction SilentlyContinue) { Write-WTLog (T 'Could not remove {0}: {1}' $n $_.Exception.Message) -Level Error }
+            else { Write-WTLog (T 'Printer removed: {0}' $n) -Level OK }
         }
     }
 }
@@ -67,7 +78,7 @@ function Clear-WTPrintQueue {
     foreach ($n in $Name) {
         $jobs = @(Get-PrintJob -PrinterName $n -ErrorAction SilentlyContinue)
         $jobs | Remove-PrintJob -ErrorAction SilentlyContinue
-        Write-WTLog "Queue of $n cleared ($($jobs.Count) jobs)." -Level OK
+        Write-WTLog (T 'Queue of {0} cleared ({1} jobs).' $n $jobs.Count) -Level OK
     }
 }
 
@@ -75,10 +86,10 @@ function Invoke-WTPrinterTestPage {
     param([Parameter(Mandatory)][string]$Name)
     $wql = $Name -replace '\\', '\\' -replace "'", "\'"
     $p = Get-CimInstance Win32_Printer -Filter "Name='$wql'" -ErrorAction SilentlyContinue
-    if (-not $p) { Write-WTLog "Printer $Name not found." -Level Error; return }
+    if (-not $p) { Write-WTLog (T 'Printer {0} not found.' $Name) -Level Error; return }
     $r = Invoke-CimMethod -InputObject $p -MethodName PrintTestPage
-    if ($r.ReturnValue -eq 0) { Write-WTLog "Test page sent to $Name." -Level OK }
-    else { Write-WTLog "Could not send the test page (code $($r.ReturnValue))." -Level Error }
+    if ($r.ReturnValue -eq 0) { Write-WTLog (T 'Test page sent to {0}.' $Name) -Level OK }
+    else { Write-WTLog (T 'Could not send the test page (code {0}).' $r.ReturnValue) -Level Error }
 }
 
 function Remove-WTUnusedPrinterDriver {
@@ -91,15 +102,15 @@ function Remove-WTUnusedPrinterDriver {
     if (-not $drivers.Count) { Write-WTLog 'No unused printer drivers.' -Level OK; return }
     if (-not $Simulate) { Restart-Service -Name Spooler -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }
     foreach ($d in $drivers) {
-        if ($Simulate) { Write-WTLog "[SIMULATION] Would remove driver $($d.Name) ($($d.PrinterEnvironment))"; continue }
+        if ($Simulate) { Write-WTLog (T '[SIMULATION] Would remove driver {0} ({1})' $d.Name $d.PrinterEnvironment); continue }
         try {
             Remove-PrinterDriver -Name $d.Name -PrinterEnvironment $d.PrinterEnvironment -RemoveFromDriverStore -ErrorAction Stop
-            Write-WTLog "Driver removed: $($d.Name)" -Level OK
+            Write-WTLog (T 'Driver removed: {0}' $d.Name) -Level OK
         } catch {
             try {
                 Remove-PrinterDriver -Name $d.Name -PrinterEnvironment $d.PrinterEnvironment -ErrorAction Stop
-                Write-WTLog "Driver removed (the package stays in the driver store): $($d.Name)" -Level OK
-            } catch { Write-WTLog "Could not remove $($d.Name): $($_.Exception.Message)" -Level Warn }
+                Write-WTLog (T 'Driver removed (the package stays in the driver store): {0}' $d.Name) -Level OK
+            } catch { Write-WTLog (T 'Could not remove {0}: {1}' $d.Name $_.Exception.Message) -Level Warn }
         }
     }
 }

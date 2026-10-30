@@ -8,25 +8,26 @@ function Update-WTOfficeInfo {
         $i = @($r) | Where-Object { $_ -and $_.PSObject.Properties['Version'] } | Select-Object -Last 1
         if ($i) {
             $ui.TxtOfficeVersion.Text = "Microsoft 365 / Office $($i.Version) · $($i.Platform) · $($i.Channel) · $($i.Culture)"
-            $ui.TxtOfficeProducts.Text = "Products: $($i.Products)"
+            $ui.TxtOfficeProducts.Text = T 'Products: {0}' $i.Products
         } else {
-            $ui.TxtOfficeVersion.Text = 'Office Click-to-Run not found'
-            $ui.TxtOfficeProducts.Text = 'Office is not installed or is an MSI version: repair it from Apps & features.'
+            $ui.TxtOfficeVersion.Text = T 'Office Click-to-Run not found'
+            $ui.TxtOfficeProducts.Text = T 'Office is not installed or is an MSI version: repair it from Apps & features.'
         }
     }
 }
 
 function Invoke-WTOfficeUserAction {
-    # Runs an action on the selected user; -LoggedOn for those that run in their session
+    # Runs an action on the selected user; -LoggedOn for those that run in their session.
+    # Title and Confirm are translated ({0} in Confirm = the user).
     param([string]$Title, [scriptblock]$Script, [switch]$LoggedOn, [string]$Confirm)
     $u = Get-WTSelectedUser 'UsersOffice' -RequireLoggedOn:$LoggedOn
     if (-not $u) { return }
-    if ($Confirm -and -not (Show-WTConfirm ($Confirm -f $u.UserName))) { return }
+    if ($Confirm -and -not (Show-WTConfirm (T $Confirm $u.UserName))) { return }
     $all = @{ User = $u.UserName; ProfilePath = $u.ProfilePath; Simulate = Get-WTSimulate }
     # only the parameters declared by the scriptblock, the others would make the binding fail
     $params = @{}
     foreach ($p in $Script.Ast.ParamBlock.Parameters) { $n = $p.Name.VariablePath.UserPath; $params[$n] = $all[$n] }
-    Start-WTTask "$Title ($($u.UserName))" $Script -Parameters $params
+    Start-WTTask "$(T $Title) ($($u.UserName))" $Script -Parameters $params
 }
 
 $pageXaml = @"
@@ -40,7 +41,7 @@ $pageXaml = @"
             <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <StackPanel>
-            <TextBlock x:Name="TxtOfficeVersion" FontWeight="SemiBold" Text="Reading the Office version..." TextWrapping="Wrap"/>
+            <TextBlock x:Name="TxtOfficeVersion" FontWeight="SemiBold" Text="$(TX 'Reading the Office version...')" TextWrapping="Wrap"/>
             <TextBlock x:Name="TxtOfficeProducts" Style="{StaticResource Hint}" Margin="0,2,0,0"/>
           </StackPanel>
         </DockPanel>
@@ -53,9 +54,9 @@ $pageXaml = @"
     </Border>
     <Border Style="{StaticResource Card}">
       <StackPanel>
-        <TextBlock Style="{StaticResource SectionTitle}" Text="User"/>
-        <WrapPanel x:Name="UsersOffice"><TextBlock Text="Loading users..." Foreground="{DynamicResource SubtleBrush}" Margin="0,0,0,6"/></WrapPanel>
-        <TextBlock Style="{StaticResource Hint}" Text="The dot marks signed-in users. Actions marked 'Session' require the user to be signed in; the applications involved are closed."/>
+        <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'User')"/>
+        <WrapPanel x:Name="UsersOffice"><TextBlock Text="$(TX 'Loading users...')" Foreground="{DynamicResource SubtleBrush}" Margin="0,0,0,6"/></WrapPanel>
+        <TextBlock Style="{StaticResource Hint}" Text="$(TX "The dot marks signed-in users. Actions marked 'Session' require the user to be signed in; the applications involved are closed.")"/>
         <WrapPanel Margin="0,12,0,0">
           $(New-Tile -Name 'BtnTeamsCache' -Glyph '&#xE8F2;' -Title 'Clear Teams cache' -Desc 'New and classic Teams: slowness, chats or images that do not load')
           $(New-Tile -Name 'BtnOfficeSignIn' -Glyph '&#xE8D7;' -Title "Reset sign-in and license" -Desc "Session · constant sign-in prompts, 'unlicensed product'")

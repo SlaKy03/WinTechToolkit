@@ -44,19 +44,19 @@ function Get-WTSavedCredential {
     # Credential Manager entries of the signed-in user
     param([Parameter(Mandatory)][string]$UserName)
     $script = (Get-WTCredentialHelperSource) + "`r`n[WTCred]::List() | ForEach-Object { 'CRED|' + `$_ }"
-    $types = @{ '1' = 'Generic'; '2' = 'Windows (domain)'; '3' = 'Certificate'; '4' = 'Windows (visible)' }
+    $types = @{ '1' = (T 'Generic'); '2' = (T 'Windows (domain)'); '3' = (T 'Certificate'); '4' = (T 'Windows (visible)') }
     $rows = foreach ($l in (Invoke-WTUserContext -UserName $UserName -Script $script)) {
         if ($l -notlike 'CRED|*') { if ($l.Trim()) { Write-WTLog "  $l" -Level Warn }; continue }
         $f = $l.Substring(5).Split('|')
         [pscustomobject]@{
             Type     = $f[0]
-            TypeText = $(if ($types[$f[0]]) { $types[$f[0]] } else { "Type $($f[0])" })
+            TypeText = $(if ($types[$f[0]]) { $types[$f[0]] } else { T 'Type {0}' $f[0] })
             Target   = $f[1]
             User     = $f[2]
             Modified = $f[3]
         }
     }
-    Write-WTLog "Saved credentials for $UserName : $(@($rows).Count)"
+    Write-WTLog (T 'Saved credentials for {0}: {1}' $UserName (@($rows).Count))
     $rows | Sort-Object Target
 }
 
@@ -64,7 +64,7 @@ function Remove-WTSavedCredential {
     # Deletes the given entries (objects from Get-WTSavedCredential) in the user's session
     param([Parameter(Mandatory)][string]$UserName, [Parameter(Mandatory)][object[]]$Credential, [switch]$Simulate)
     if ($Simulate) {
-        foreach ($c in $Credential) { Write-WTLog "[SIMULATION] Would delete credential $($c.Target)" }
+        foreach ($c in $Credential) { Write-WTLog (T '[SIMULATION] Would delete credential {0}' $c.Target) }
         return
     }
     $lines = foreach ($c in $Credential) {
@@ -73,8 +73,8 @@ function Remove-WTSavedCredential {
     }
     $script = (Get-WTCredentialHelperSource) + "`r`n" + ($lines -join "`r`n")
     foreach ($l in (Invoke-WTUserContext -UserName $UserName -Script $script)) {
-        if ($l -like 'OK|*') { Write-WTLog "Credential deleted: $($l.Substring(3))" -Level OK }
-        elseif ($l -like 'KO|*') { Write-WTLog "Could not delete: $($l.Substring(3))" -Level Error }
+        if ($l -like 'OK|*') { Write-WTLog (T 'Credential deleted: {0}' $l.Substring(3)) -Level OK }
+        elseif ($l -like 'KO|*') { Write-WTLog (T 'Could not delete: {0}' $l.Substring(3)) -Level Error }
         elseif ($l.Trim()) { Write-WTLog "  $l" }
     }
 }
@@ -89,7 +89,7 @@ function Clear-WTKerberosTicket {
     }
     if (-not $UserName) { Write-WTLog 'No signed-in user specified.' -Level Error; return }
     foreach ($l in (Invoke-WTUserContext -UserName $UserName -Script 'klist purge')) { Write-WTLog "  $l" }
-    Write-WTLog "Kerberos tickets of $UserName deleted: they will be requested again on the next access to a resource." -Level OK
+    Write-WTLog (T 'Kerberos tickets of {0} deleted: they will be requested again on the next access to a resource.' $UserName) -Level OK
 }
 
 function Show-WTKerberosTicket {
@@ -116,12 +116,17 @@ function Get-WTGroupMember {
         # WinNT://DOMAIN/user, WinNT://DOMAIN/PC/user for local accounts, WinNT://S-1-... if unresolved
         $parts = ($path -replace '^WinNT://', '') -split '/'
         $name = if ($parts.Count -ge 3) { "$($parts[-2])\$($parts[-1])" } else { $parts -join '\' }
+        # Source: code used by the checks and the row colours, SourceText: shown in the table
         $source = 'Domain'
         if ($parts.Count -ge 3 -and $parts[-2] -eq $env:COMPUTERNAME) { $source = 'Local' }
         elseif ($name -match '^S-1-12-1-') { $source = 'Entra ID' }
         elseif ($name -match '^S-1-5-21-') { $source = 'Orphaned SID (deleted account?)' }
         elseif ($sid -and $sid -notmatch '^S-1-5-21-|^S-1-12-1-') { $source = 'System' }
-        [pscustomobject]@{ Name = $name; Class = $class; Source = $source; SID = $sid; AdsPath = $path; Group = $groupName; GroupSid = $GroupSid }
+        $sourceText = switch ($source) {
+            'Domain' { T 'Domain' } 'Local' { T 'Local' } 'Entra ID' { 'Entra ID' }
+            'System' { T 'System' } default { T 'Orphaned SID (deleted account?)' }
+        }
+        [pscustomobject]@{ Name = $name; Class = $class; Source = $source; SourceText = $sourceText; SID = $sid; AdsPath = $path; Group = $groupName; GroupSid = $GroupSid }
     }
 }
 
@@ -129,10 +134,10 @@ function Add-WTGroupMember {
     # Adds an account (DOMAIN\user, AzureAD\user@domain or local user) to the group
     param([string]$GroupSid = 'S-1-5-32-544', [Parameter(Mandatory)][string]$Member, [switch]$Simulate)
     $groupName = ((New-Object Security.Principal.SecurityIdentifier $GroupSid).Translate([Security.Principal.NTAccount]).Value -split '\\')[-1]
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would add $Member to group $groupName"; return }
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would add {0} to group {1}' $Member $groupName); return }
     $r = Invoke-WTProcess -FilePath 'net.exe' -Arguments "localgroup `"$groupName`" `"$Member`" /add"
-    if ($r.ExitCode -eq 0) { Write-WTLog "$Member added to group $groupName (applies at the user's next sign-in)." -Level OK }
-    else { Write-WTLog "Could not add $Member to group $groupName." -Level Error }
+    if ($r.ExitCode -eq 0) { Write-WTLog (T "{0} added to group {1} (applies at the user's next sign-in)." $Member $groupName) -Level OK }
+    else { Write-WTLog (T 'Could not add {0} to group {1}.' $Member $groupName) -Level Error }
 }
 
 function Remove-WTGroupMember {
@@ -140,14 +145,14 @@ function Remove-WTGroupMember {
     param([Parameter(Mandatory)][object[]]$InputObject, [switch]$Simulate)
     $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     foreach ($m in $InputObject) {
-        if ($m.SID -eq $me) { Write-WTLog "Skipped $($m.Name): it is the account running the toolkit." -Level Warn; continue }
-        if ($m.SID -match '-500$' -and $m.Source -eq 'Local') { Write-WTLog "Skipped $($m.Name): it is the built-in administrator." -Level Warn; continue }
-        if ($Simulate) { Write-WTLog "[SIMULATION] Would remove $($m.Name) from group $($m.Group)"; continue }
+        if ($m.SID -eq $me) { Write-WTLog (T 'Skipped {0}: it is the account running the toolkit.' $m.Name) -Level Warn; continue }
+        if ($m.SID -match '-500$' -and $m.Source -eq 'Local') { Write-WTLog (T 'Skipped {0}: it is the built-in administrator.' $m.Name) -Level Warn; continue }
+        if ($Simulate) { Write-WTLog (T '[SIMULATION] Would remove {0} from group {1}' $m.Name $m.Group); continue }
         try {
             ([ADSI]"WinNT://$env:COMPUTERNAME/$($m.Group),group").psbase.Invoke('Remove', $m.AdsPath)
-            Write-WTLog "$($m.Name) removed from group $($m.Group)." -Level OK
+            Write-WTLog (T '{0} removed from group {1}.' $m.Name $m.Group) -Level OK
         } catch {
-            Write-WTLog "Could not remove $($m.Name): $($_.Exception.GetBaseException().Message)" -Level Error
+            Write-WTLog (T 'Could not remove {0}: {1}' $m.Name $_.Exception.GetBaseException().Message) -Level Error
         }
     }
 }

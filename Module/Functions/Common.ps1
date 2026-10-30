@@ -27,17 +27,79 @@ function Get-WTDataFolder {
     $root
 }
 
+function Get-WTLanguage {
+    <#
+    .SYNOPSIS
+        Interface language: the one chosen by the user ('en', 'it'...) if a translation exists,
+        otherwise the Windows display language, otherwise English.
+    #>
+    param([string]$Preferred)
+    $available = @('en') + @(Get-ChildItem (Join-Path $script:WTModuleRoot 'Lang') -Filter '*.psd1' -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName })
+    foreach ($l in @($Preferred, [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)) {
+        if ($l -and $available -contains $l) { return $l.ToLowerInvariant() }
+    }
+    'en'
+}
+
+function Read-WTStringTable {
+    <#
+    .SYNOPSIS
+        Reads a Lang\*.psd1 file as a hashtable (English text -> translation).
+    .DESCRIPTION
+        Import-PowerShellDataFile refuses files this large (too many elements for its safety
+        check): the file is parsed and only constant strings are taken, nothing is run.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    $table = @{}
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$null, [ref]$errors)
+    if ($errors) { return $table }
+    $hash = $ast.Find({ param($a) $a -is [System.Management.Automation.Language.HashtableAst] }, $false)
+    foreach ($kv in @($hash.KeyValuePairs)) {
+        $value = $kv.Item2.PipelineElements[0].Expression
+        if ($kv.Item1 -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+            $value -is [System.Management.Automation.Language.StringConstantExpressionAst]) { $table[$kv.Item1.Value] = $value.Value }
+    }
+    $table
+}
+
+function Get-WTText {
+    <#
+    .SYNOPSIS
+        Text in the interface language ($global:WTLanguage). The English text is the key, the
+        translations are in Module\Lang\<language>.psd1; a missing translation stays in English.
+        With arguments, {0} {1}... are replaced as with -f.
+    .EXAMPLE
+        T 'Folder deleted: {0}' $path
+    #>
+    param([Parameter(Position = 0)][AllowEmptyString()][string]$Text, [Parameter(Position = 1, ValueFromRemainingArguments)][object[]]$Arguments)
+    $lang = $global:WTLanguage
+    if ($lang -and $lang -ne 'en' -and $Text) {
+        if ($script:WTStringsLanguage -ne $lang) {
+            $script:WTStringsLanguage = $lang
+            $script:WTStrings = @{}
+            $file = if ($script:WTModuleRoot) { Join-Path $script:WTModuleRoot "Lang\$lang.psd1" } else { '' }
+            if ($file -and (Test-Path -LiteralPath $file)) { try { $script:WTStrings = Read-WTStringTable $file } catch { } }
+        }
+        $t = $script:WTStrings[$Text]
+        if ($t) { $Text = $t }
+    }
+    if ($PSBoundParameters.ContainsKey('Arguments')) { $Text -f $Arguments } else { $Text }
+}
+Set-Alias -Name T -Value Get-WTText
+
 function Write-WTLog {
     <#
     .SYNOPSIS
         Writes a log line. Inside the GUI the line goes to a queue read by the UI thread;
-        from the console it is printed and saved to a file.
+        from the console it is printed and saved to a file. The message is translated (T).
     #>
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)][AllowEmptyString()][string]$Message,
         [ValidateSet('Info', 'OK', 'Warn', 'Error')][string]$Level = 'Info'
     )
+    $Message = Get-WTText $Message
     $tag = @{ Info = 'INFO'; OK = 'OK'; Warn = 'WARN'; Error = 'ERROR' }[$Level]
     $line = '{0} [{1,-5}] {2}' -f (Get-Date -Format 'HH:mm:ss'), $tag, $Message
 
@@ -91,7 +153,7 @@ function Invoke-WTProcess {
     try {
         $proc = [Diagnostics.Process]::Start($psi)
     } catch {
-        Write-WTLog "Unable to start $FilePath : $($_.Exception.Message)" -Level Error
+        Write-WTLog (T 'Unable to start {0}: {1}' $FilePath $_.Exception.Message) -Level Error
         return [pscustomobject]@{ ExitCode = -1; Output = @() }
     }
     # In the GUI the Stop button terminates the programs started by the current operation:
@@ -137,13 +199,13 @@ function Format-WTSize {
 
 function Format-WTUptime {
     param([TimeSpan]$Span)
-    if ($Span.Days) { return '{0} d {1} h {2} min' -f $Span.Days, $Span.Hours, $Span.Minutes }
-    '{0} h {1} min' -f $Span.Hours, $Span.Minutes
+    if ($Span.Days) { return T '{0} d {1} h {2} min' $Span.Days $Span.Hours $Span.Minutes }
+    T '{0} h {1} min' $Span.Hours $Span.Minutes
 }
 
 function Format-WTBool {
     param($Value)
-    if ($Value) { 'Yes' } else { 'No' }
+    if ($Value) { T 'Yes' } else { T 'No' }
 }
 
 function Get-WTFolderSize {
@@ -238,12 +300,12 @@ function Remove-WTFolder {
     param([Parameter(Mandatory)][string]$Path, [switch]$Simulate)
     $p = $Path.TrimEnd('\')
     if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p) {
-        Write-WTLog "Protected path, deletion refused: $p" -Level Error
+        Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
         return $false
     }
     if (-not (Test-Path -LiteralPath $p)) { return $true }
     if ($Simulate) {
-        Write-WTLog "[SIMULATION] Would delete folder: $p"
+        Write-WTLog (T '[SIMULATION] Would delete folder: {0}' $p)
         return $true
     }
 
@@ -263,10 +325,10 @@ function Remove-WTFolder {
         }
     }
     if (Test-Path -LiteralPath $p) {
-        Write-WTLog "Could not delete completely: $p (files in use? try again after a restart)" -Level Warn
+        Write-WTLog (T 'Could not delete completely: {0} (files in use? try again after a restart)' $p) -Level Warn
         return $false
     }
-    Write-WTLog "Folder deleted: $p" -Level OK
+    Write-WTLog (T 'Folder deleted: {0}' $p) -Level OK
     $true
 }
 
@@ -293,7 +355,7 @@ function Clear-WTFolderContent {
     if (-not (Test-Path -LiteralPath $Path)) { return [int64]0 }
     $before = Get-WTFolderSize -Path $Path
     if ($Simulate) {
-        if ($before -gt 0) { Write-WTLog "[SIMULATION] Would empty $Path ($(Format-WTSize $before))" }
+        if ($before -gt 0) { Write-WTLog (T '[SIMULATION] Would empty {0} ({1})' $Path (Format-WTSize $before)) }
         return $before
     }
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
@@ -321,14 +383,15 @@ function Remove-WTRegistryKey {
     param([Parameter(Mandatory)][string]$Key, [switch]$Simulate)
     $psPath = "Registry::$Key"
     if (-not (Test-Path -LiteralPath $psPath)) { return $true }
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would delete key: $Key"; return $true }
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would delete key: {0}' $Key); return $true }
     $bak = Backup-WTRegistryKey -Key $Key
     try {
         Remove-Item -LiteralPath $psPath -Recurse -Force -ErrorAction Stop
-        Write-WTLog "Key deleted: $Key$(if ($bak) { " (backup: $(Split-Path $bak -Leaf))" })" -Level OK
+        if ($bak) { Write-WTLog (T 'Key deleted: {0} (backup: {1})' $Key (Split-Path $bak -Leaf)) -Level OK }
+        else { Write-WTLog (T 'Key deleted: {0}' $Key) -Level OK }
         $true
     } catch {
-        Write-WTLog "Could not delete key $Key : $($_.Exception.Message)" -Level Error
+        Write-WTLog (T 'Could not delete key {0}: {1}' $Key $_.Exception.Message) -Level Error
         $false
     }
 }
@@ -422,11 +485,11 @@ function Invoke-WTUserContext {
             $info = Get-ScheduledTaskInfo -TaskName $id -TaskPath $taskPath -ErrorAction SilentlyContinue
             $done = $info -and $info.LastTaskResult -ne 267011 -and $info.LastTaskResult -ne 267009
         } until ($done -or (Get-Date) -gt $deadline)
-        if (-not $done) { Write-WTLog "Timeout: the script in ${UserName}'s session did not finish within $TimeoutSec seconds." -Level Warn }
+        if (-not $done) { Write-WTLog (T "Timeout: the script in {0}'s session did not finish within {1} seconds." $UserName $TimeoutSec) -Level Warn }
 
         if (Test-Path -LiteralPath $out) { Get-Content -LiteralPath $out -Encoding UTF8 | Where-Object { $_ -ne '' } }
     } catch {
-        Write-WTLog "Execution in ${UserName}'s session failed: $($_.Exception.Message)" -Level Error
+        Write-WTLog (T "Execution in {0}'s session failed: {1}" $UserName $_.Exception.Message) -Level Error
     } finally {
         Unregister-ScheduledTask -TaskName $id -TaskPath $taskPath -Confirm:$false -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $ps1, $out -Force -ErrorAction SilentlyContinue
@@ -445,7 +508,7 @@ function Stop-WTUserProcess {
     $procs = @(Get-Process -Name $Name -IncludeUserName -ErrorAction SilentlyContinue)
     if ($UserName) { $procs = @($procs | Where-Object { $_.UserName -eq $UserName }) }
     foreach ($p in $procs) {
-        Write-WTLog "Closing $($p.ProcessName) (PID $($p.Id))"
+        Write-WTLog (T 'Closing {0} (PID {1})' $p.ProcessName $p.Id)
         Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
     }
     if ($procs.Count) { Start-Sleep -Seconds 2 }

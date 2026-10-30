@@ -17,6 +17,34 @@ function Test-WTRebootRequired {
     [bool]@($Reasons | Where-Object { $_ -and $_ -ne 'Pending file renames' }).Count
 }
 
+function Format-WTRebootReasons {
+    # The reasons of Test-WTPendingReboot as text in the interface language
+    param([string[]]$Reasons)
+    (@($Reasons | ForEach-Object { if ($_ -eq 'Pending file renames') { T 'Pending file renames' } else { $_ } })) -join ', '
+}
+
+function Get-WTStateText {
+    # BitLocker, Secure Boot, TPM and disk health states (on, off, Healthy...) in the interface language
+    param([string]$State)
+    switch -Regex ($State) {
+        '^on$' { return T 'on' }
+        '^off$' { return T 'off' }
+        '^unknown$' { return T 'unknown' }
+        '^not supported$' { return T 'not supported' }
+        '^encrypting$' { return T 'encrypting' }
+        '^suspended$' { return T 'suspended' }
+        '^absent$' { return T 'absent' }
+        '^n/a$' { return T 'n/a' }
+        '^n/a \(code (.*)\)$' { return T 'n/a (code {0})' $Matches[1] }
+        '^(.+) on$' { return "$($Matches[1]) $(T 'on')" }
+        '^(.+) off$' { return "$($Matches[1]) $(T 'off')" }
+        '^Healthy$' { return T 'Healthy' }
+        '^Warning$' { return T 'Warning' }
+        '^Unhealthy$' { return T 'Unhealthy' }
+    }
+    $State
+}
+
 function Get-WTSecurityState {
     # BitLocker, Secure Boot and TPM without their cmdlets, which are slow.
     # Without privileges the BitLocker and TPM CIM namespaces take seconds just to answer "access denied".
@@ -64,7 +92,8 @@ function Get-WTSecurityState {
 function Get-WTSystemInfo {
     # Text inventory of the computer, meant to be pasted into a ticket
     $L = New-Object Collections.Generic.List[string]
-    function Add-Line($Label, $Value) { $L.Add(('{0,-24}: {1}' -f $Label, $Value)) }
+    # the label is translated (T)
+    function Add-Line($Label, $Value) { $L.Add(('{0,-26}: {1}' -f (T $Label), $Value)) }
 
     $cs = Get-CimInstance Win32_ComputerSystem
     $bios = Get-CimInstance Win32_BIOS
@@ -72,25 +101,25 @@ function Get-WTSystemInfo {
     $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
     $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 
-    $L.Add('=== COMPUTER ===')
+    $L.Add((T '=== COMPUTER ==='))
     Add-Line 'Computer name' $env:COMPUTERNAME
     if ($cs.PartOfDomain) { Add-Line 'Domain' $cs.Domain } else { Add-Line 'Workgroup' $cs.Workgroup }
-    Add-Line 'Signed-in user' $(if ($cs.UserName) { $cs.UserName } else { '(none)' })
+    Add-Line 'Signed-in user' $(if ($cs.UserName) { $cs.UserName } else { T '(none)' })
     Add-Line 'Manufacturer' $cs.Manufacturer
     Add-Line 'Model' $cs.Model
     Add-Line 'Serial number' $bios.SerialNumber
-    Add-Line 'BIOS' ('{0} dated {1:yyyy-MM-dd}' -f $bios.SMBIOSBIOSVersion, $bios.ReleaseDate)
+    Add-Line 'BIOS' (T '{0} dated {1:yyyy-MM-dd}' $bios.SMBIOSBIOSVersion $bios.ReleaseDate)
 
-    $L.Add(''); $L.Add('=== OPERATING SYSTEM ===')
+    $L.Add(''); $L.Add((T '=== OPERATING SYSTEM ==='))
     Add-Line 'System' $os.Caption
     Add-Line 'Version' ('{0} (build {1}.{2})' -f $cv.DisplayVersion, $os.BuildNumber, $cv.UBR)
     Add-Line 'Architecture' $os.OSArchitecture
     Add-Line 'Installed on' $os.InstallDate.ToString('yyyy-MM-dd HH:mm')
     $up = (Get-Date) - $os.LastBootUpTime
-    Add-Line 'Last boot' ('{0:yyyy-MM-dd HH:mm} (up for {1})' -f $os.LastBootUpTime, (Format-WTUptime $up))
+    Add-Line 'Last boot' (T '{0:yyyy-MM-dd HH:mm} (up for {1})' $os.LastBootUpTime (Format-WTUptime $up))
     $pending = @(Test-WTPendingReboot)
-    Add-Line 'Restart pending' $(if (Test-WTRebootRequired $pending) { 'YES - ' + ($pending -join ', ') }
-        elseif ($pending.Count) { 'No (only file renames queued by installers)' } else { 'No' })
+    Add-Line 'Restart pending' $(if (Test-WTRebootRequired $pending) { T 'YES - {0}' (Format-WTRebootReasons $pending) }
+        elseif ($pending.Count) { T 'No (only file renames queued by installers)' } else { T 'No' })
     # InstalledOn arrives as an "M/d/yyyy" string and is sometimes empty or in odd formats
     $hf = Get-CimInstance Win32_QuickFixEngineering -ErrorAction SilentlyContinue | ForEach-Object {
         $d = [datetime]::MinValue
@@ -98,37 +127,38 @@ function Get-WTSystemInfo {
             [pscustomobject]@{ Id = $_.HotFixID; Date = $d }
         }
     } | Sort-Object Date -Descending | Select-Object -First 1
-    if ($hf) { Add-Line 'Latest update' ('{0} dated {1:yyyy-MM-dd}' -f $hf.Id, $hf.Date) }
+    if ($hf) { Add-Line 'Latest update' (T '{0} dated {1:yyyy-MM-dd}' $hf.Id $hf.Date) }
 
     $L.Add(''); $L.Add('=== HARDWARE ===')
     Add-Line 'CPU' $cpu.Name.Trim()
     Add-Line 'RAM' ('{0:N1} GB' -f ($cs.TotalPhysicalMemory / 1GB))
     foreach ($d in Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3') {
         $pct = if ($d.Size) { [math]::Round($d.FreeSpace / $d.Size * 100) } else { 0 }
-        Add-Line "Volume $($d.DeviceID)" ('{0} free of {1} ({2}% free)' -f (Format-WTSize $d.FreeSpace), (Format-WTSize $d.Size), $pct)
+        $L.Add(('{0,-26}: {1}' -f (T 'Volume {0}' $d.DeviceID), (T '{0} free of {1} ({2}% free)' (Format-WTSize $d.FreeSpace) (Format-WTSize $d.Size) $pct)))
     }
     foreach ($pd in Get-WTPhysicalDiskInfo) {
-        Add-Line 'Physical disk' ('{0} - {1} {2} - {3} - {4}' -f $pd.Name, $pd.MediaType, $pd.BusType, $pd.SizeText, $pd.Health)
+        Add-Line 'Physical disk' ('{0} - {1} {2} - {3} - {4}' -f $pd.Name, $pd.MediaType, $pd.BusType, $pd.SizeText, (Get-WTStateText $pd.Health))
     }
 
-    $L.Add(''); $L.Add('=== SECURITY ===')
+    $L.Add(''); $L.Add((T '=== SECURITY ==='))
     $sec = Get-WTSecurityState -Detailed
-    Add-Line 'BitLocker' $(if ($null -ne $sec.BitLockerPercent) { "$($sec.BitLocker) ($($sec.BitLockerPercent)% encrypted)" } else { $sec.BitLocker })
-    Add-Line 'TPM' $sec.Tpm
-    Add-Line 'Secure Boot' $sec.SecureBoot
+    $bl = Get-WTStateText $sec.BitLocker
+    Add-Line 'BitLocker' $(if ($null -ne $sec.BitLockerPercent) { T '{0} ({1}% encrypted)' $bl $sec.BitLockerPercent } else { $bl })
+    Add-Line 'TPM' (Get-WTStateText $sec.Tpm)
+    Add-Line 'Secure Boot' (Get-WTStateText $sec.SecureBoot)
     try {
         $av = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop
         Add-Line 'Antivirus' ((@($av.displayName) | Select-Object -Unique) -join ', ')
     } catch { }
 
-    $L.Add(''); $L.Add('=== NETWORK ===')
+    $L.Add(''); $L.Add((T '=== NETWORK ==='))
     foreach ($n in Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=TRUE') {
         Add-Line 'Adapter' $n.Description
         Add-Line '  MAC' $n.MACAddress
         Add-Line '  IP' (@($n.IPAddress) -join ', ')
         Add-Line '  Gateway' (@($n.DefaultIPGateway) -join ', ')
         Add-Line '  DNS' (@($n.DNSServerSearchOrder) -join ', ')
-        Add-Line '  DHCP' $(if ($n.DHCPEnabled) { "Yes ($($n.DHCPServer))" } else { 'No (static IP)' })
+        Add-Line '  DHCP' $(if ($n.DHCPEnabled) { T 'Yes ({0})' $n.DHCPServer } else { T 'No (static IP)' })
     }
     $L -join [Environment]::NewLine
 }
@@ -161,14 +191,15 @@ function Get-WTSystemSummary {
         LastBoot      = $os.LastBootUpTime.ToString('yyyy-MM-dd HH:mm')
         PendingReboot = Test-WTRebootRequired $pending
         PendingRenames = $pending -contains 'Pending file renames'
-        PendingText   = $pending -join ', '
+        PendingText   = Format-WTRebootReasons $pending
         DiskFreeText  = Format-WTSize $disk.FreeSpace
         DiskTotalText = Format-WTSize $disk.Size
         DiskUsedPct   = $diskPct
         RamText       = '{0:N1} GB' -f ($ramTotal / 1GB)
         RamUsedPct    = [int][math]::Round((1 - $ramFree / $ramTotal) * 100)
-        IP            = $(if ($net) { @($net.IPAddress | Where-Object { $_ -notmatch ':' })[0] } else { 'not connected' })
-        Domain        = $(if ($cs.PartOfDomain) { $cs.Domain } else { "Workgroup $($cs.Workgroup)" })
+        IP            = $(if ($net) { @($net.IPAddress | Where-Object { $_ -notmatch ':' })[0] } else { T 'not connected' })
+        Domain        = $(if ($cs.PartOfDomain) { $cs.Domain } else { T 'Workgroup {0}' $cs.Workgroup })
+        DomainName    = $(if ($cs.PartOfDomain) { $cs.Domain } else { $cs.Workgroup })
         BitLocker     = $sec.BitLocker
         SecureBoot    = $sec.SecureBoot
         Tpm           = $sec.Tpm
@@ -231,13 +262,13 @@ function Get-WTDiskHealth {
     if (-not $disks.Count) { Write-WTLog 'Could not read the physical disks.' -Level Error; return }
     foreach ($d in $disks) {
         $lvl = if ($d.Health -eq 'Healthy') { 'OK' } else { 'Error' }
-        Write-WTLog ('{0} - {1} {2} - {3} - Status: {4} ({5})' -f $d.Name, $d.MediaType, $d.BusType, $d.SizeText, $d.Health, $d.Operational) -Level $lvl
+        Write-WTLog (T '{0} - {1} {2} - {3} - Status: {4} ({5})' $d.Name $d.MediaType $d.BusType $d.SizeText (Get-WTStateText $d.Health) $d.Operational) -Level $lvl
         $parts = @()
-        if ($d.Temperature) { $parts += "temperature $($d.Temperature) °C" }
-        if ($null -ne $d.Wear) { $parts += "wear $($d.Wear)%" }
-        if ($d.PowerOnHours) { $parts += "power-on hours $($d.PowerOnHours)" }
-        if ($d.ReadErrors) { $parts += "uncorrected read errors $($d.ReadErrors)" }
-        if ($d.WriteErrors) { $parts += "uncorrected write errors $($d.WriteErrors)" }
+        if ($d.Temperature) { $parts += T 'temperature {0} °C' $d.Temperature }
+        if ($null -ne $d.Wear) { $parts += T 'wear {0}%' $d.Wear }
+        if ($d.PowerOnHours) { $parts += T 'power-on hours {0}' $d.PowerOnHours }
+        if ($d.ReadErrors) { $parts += T 'uncorrected read errors {0}' $d.ReadErrors }
+        if ($d.WriteErrors) { $parts += T 'uncorrected write errors {0}' $d.WriteErrors }
         if ($parts) {
             $warn = ($d.Wear -ge 80) -or ($d.ReadErrors -gt 0) -or ($d.WriteErrors -gt 0)
             Write-WTLog "   $($parts -join ', ')" -Level $(if ($warn) { 'Warn' } else { 'Info' })
@@ -254,13 +285,13 @@ function New-WTRestorePoint {
     $old = (Get-ItemProperty $key -Name SystemRestorePointCreationFrequency -ErrorAction SilentlyContinue).SystemRestorePointCreationFrequency
     try {
         New-ItemProperty -Path $key -Name SystemRestorePointCreationFrequency -Value 0 -PropertyType DWord -Force | Out-Null
-        Write-WTLog "Creating restore point '$Description'..."
+        Write-WTLog (T "Creating restore point '{0}'..." $Description)
         Checkpoint-Computer -Description $Description -RestorePointType MODIFY_SETTINGS -ErrorAction Stop -WarningAction SilentlyContinue
         Write-WTLog 'Restore point created.' -Level OK
         $true
     } catch {
-        Write-WTLog "Could not create the restore point: $($_.Exception.Message)" -Level Error
-        Write-WTLog "Check that System Protection is on for $env:SystemDrive (Enable-ComputerRestore -Drive '$env:SystemDrive\')." -Level Warn
+        Write-WTLog (T 'Could not create the restore point: {0}' $_.Exception.Message) -Level Error
+        Write-WTLog (T "Check that System Protection is on for {0} (Enable-ComputerRestore -Drive '{0}\')." $env:SystemDrive) -Level Warn
         $false
     } finally {
         if ($null -eq $old) { Remove-ItemProperty -Path $key -Name SystemRestorePointCreationFrequency -ErrorAction SilentlyContinue }
@@ -277,7 +308,7 @@ function New-WTBatteryReport {
     $file = Join-Path (Get-WTDataFolder) ('Report\Battery_{0}_{1:yyyyMMdd_HHmm}.html' -f $env:COMPUTERNAME, (Get-Date))
     $r = Invoke-WTProcess -FilePath 'powercfg.exe' -Arguments "/batteryreport /output `"$file`""
     if ($r.ExitCode -eq 0 -and (Test-Path -LiteralPath $file)) {
-        Write-WTLog "Battery report created: $file" -Level OK
+        Write-WTLog (T 'Battery report created: {0}' $file) -Level OK
         $file
     } else {
         Write-WTLog 'Could not create the battery report.' -Level Error

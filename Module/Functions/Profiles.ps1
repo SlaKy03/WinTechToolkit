@@ -16,8 +16,10 @@ function New-WTProfileObject {
     param($Type, $UserName, $Sid, $KeyName, $Path, $LastUse, $Loaded, $Status, $SizeBytes, $ProtectReason)
     $days = $null
     if ($LastUse) { $days = [int][math]::Floor(((Get-Date) - $LastUse).TotalDays) }
+    # Type: Profile, Backup .bak or Orphan folder (used by the checks), TypeText: shown in the table
     [pscustomobject]@{
         Type          = $Type
+        TypeText      = $(switch ($Type) { 'Profile' { T 'Profile' } 'Orphan folder' { T 'Orphan folder' } default { T 'Backup .bak' } })
         UserName      = $UserName
         SID           = $Sid
         KeyName       = $KeyName
@@ -76,21 +78,21 @@ function Get-WTUserProfile {
         }
 
         $status = 'OK'
-        if ($isBak) { $status = '.bak key (corrupted profile)' }
-        elseif ($path -match '\\TEMP(\.[^\\]*)?$') { $status = 'Temporary profile (TEMP)' }
-        elseif (-not $exists) { $status = 'Folder missing' }
+        if ($isBak) { $status = T '.bak key (corrupted profile)' }
+        elseif ($path -match '\\TEMP(\.[^\\]*)?$') { $status = T 'Temporary profile (TEMP)' }
+        elseif (-not $exists) { $status = T 'Folder missing' }
 
         $protect = ''
-        if ($loaded) { $protect = 'Profile loaded (user signed in)' }
-        elseif ($sid -eq $currentSid) { $protect = 'Account running the toolkit' }
-        elseif ($c -and $c.Special) { $protect = 'System profile' }
-        elseif ($path -and -not $path.StartsWith($profilesDir + '\', [StringComparison]::OrdinalIgnoreCase)) { $protect = "Path outside $profilesDir" }
+        if ($loaded) { $protect = T 'Profile loaded (user signed in)' }
+        elseif ($sid -eq $currentSid) { $protect = T 'Account running the toolkit' }
+        elseif ($c -and $c.Special) { $protect = T 'System profile' }
+        elseif ($path -and -not $path.StartsWith($profilesDir + '\', [StringComparison]::OrdinalIgnoreCase)) { $protect = T 'Path outside {0}' $profilesDir }
 
         $size = $null
         if ($IncludeSize -and $exists) { $size = Get-WTFolderSize -Path $path }
 
         $name = Resolve-WTSidName $sid
-        if (-not $name) { $name = if ($path) { "(unresolved) $(Split-Path $path -Leaf)" } else { '(unresolved)' } }
+        if (-not $name) { $name = if ($path) { "$(T '(unresolved)') $(Split-Path $path -Leaf)" } else { T '(unresolved)' } }
 
         $type = if ($isBak) { 'Backup .bak' } else { 'Profile' }
         $result.Add((New-WTProfileObject -Type $type -UserName $name -Sid $sid -KeyName $keyName -Path $path `
@@ -107,7 +109,7 @@ function Get-WTUserProfile {
             $size = $null
             if ($IncludeSize) { $size = Get-WTFolderSize -Path $d.FullName }
             $result.Add((New-WTProfileObject -Type 'Orphan folder' -UserName $d.Name -Sid '' -KeyName '' -Path $d.FullName `
-                        -LastUse $d.LastWriteTime -Loaded $false -Status 'Not registered in ProfileList' -SizeBytes $size -ProtectReason ''))
+                        -LastUse $d.LastWriteTime -Loaded $false -Status (T 'Not registered in ProfileList') -SizeBytes $size -ProtectReason ''))
         }
     }
     $result | Sort-Object Type, UserName
@@ -151,12 +153,12 @@ function Remove-WTUserProfile {
     $profilesDir = Get-WTProfilesDirectory
     $ok = 0; $ko = 0
     foreach ($p in $InputObject) {
-        Write-WTLog "--- $($p.Type): $($p.UserName) [$($p.Path)]"
-        if ($p.Protected) { Write-WTLog "Skipped: $($p.ProtectReason)" -Level Warn; $ko++; continue }
+        Write-WTLog "--- $($p.TypeText): $($p.UserName) [$($p.Path)]"
+        if ($p.Protected) { Write-WTLog (T 'Skipped: {0}' $p.ProtectReason) -Level Warn; $ko++; continue }
 
         if ($p.Type -eq 'Orphan folder') {
             if (-not $p.Path.StartsWith($profilesDir + '\', [StringComparison]::OrdinalIgnoreCase)) {
-                Write-WTLog "Skipped: the folder is not under $profilesDir" -Level Warn; $ko++; continue
+                Write-WTLog (T 'Skipped: the folder is not under {0}' $profilesDir) -Level Warn; $ko++; continue
             }
             if (Remove-WTFolder -Path $p.Path -Simulate:$Simulate) { $ok++ } else { $ko++ }
             continue
@@ -184,13 +186,13 @@ function Remove-WTUserProfile {
 
         # 1) "Official" deletion through WMI (folder + ProfileList)
         if ($fullDelete -and $inst) {
-            if ($Simulate) { Write-WTLog "[SIMULATION] Would delete the profile through WMI (SID $sid)" }
+            if ($Simulate) { Write-WTLog (T '[SIMULATION] Would delete the profile through WMI (SID {0})' $sid) }
             else {
                 try {
                     Remove-CimInstance -InputObject $inst -ErrorAction Stop
                     Write-WTLog 'Profile deleted through WMI.' -Level OK
                 } catch {
-                    Write-WTLog "WMI deletion failed ($($_.Exception.Message)): continuing with manual cleanup." -Level Warn
+                    Write-WTLog (T 'WMI deletion failed ({0}): continuing with manual cleanup.' $_.Exception.Message) -Level Warn
                 }
             }
         }
@@ -201,7 +203,7 @@ function Remove-WTUserProfile {
         Remove-WTProfileRegistryResidue -Sid $sid -KeyNames $keyNames -IncludeSidKeys:$fullDelete -Simulate:$Simulate
         if ($allOk) { $ok++ } else { $ko++ }
     }
-    Write-WTLog "Profiles processed: $ok completed, $ko skipped or incomplete." -Level $(if ($ko) { 'Warn' } else { 'OK' })
+    Write-WTLog (T 'Profiles processed: {0} completed, {1} skipped or incomplete.' $ok $ko) -Level $(if ($ko) { 'Warn' } else { 'OK' })
 }
 
 function Repair-WTTempProfile {
@@ -214,7 +216,7 @@ function Repair-WTTempProfile {
     $base = $script:WTProfileListKey
     $main = "$base\$Sid"
     $bak = "$base\$Sid.bak"
-    if (-not (Test-Path -LiteralPath $bak)) { Write-WTLog "No $Sid.bak key found: nothing to repair." -Level Warn; return }
+    if (-not (Test-Path -LiteralPath $bak)) { Write-WTLog (T 'No {0}.bak key found: nothing to repair.' $Sid) -Level Warn; return }
 
     $inst = Get-CimInstance Win32_UserProfile -Filter "SID='$Sid'" -ErrorAction SilentlyContinue
     if ($inst -and $inst.Loaded) { Write-WTLog 'The user is signed in: sign them out and try again.' -Level Error; return }
@@ -224,13 +226,13 @@ function Repair-WTTempProfile {
         $mainPath = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath $main).ProfileImagePath)
         $isTemp = $mainPath -match '\\TEMP(\.[^\\]*)?$' -or -not (Test-Path -LiteralPath $mainPath)
         if (-not $isTemp) {
-            Write-WTLog "Both $Sid and $Sid.bak point to valid profiles ($mainPath): check manually which one to keep." -Level Error
+            Write-WTLog (T 'Both {0} and {0}.bak point to valid profiles ({1}): check manually which one to keep.' $Sid $mainPath) -Level Error
             return
         }
     }
     $bakPath = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath $bak).ProfileImagePath)
-    Write-WTLog "Profile to restore: $bakPath"
-    if ($Simulate) { Write-WTLog "[SIMULATION] Would delete $Sid (-> $mainPath) and rename $Sid.bak to $Sid"; return }
+    Write-WTLog (T 'Profile to restore: {0}' $bakPath)
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would delete {0} (-> {1}) and rename {0}.bak to {0}' $Sid $mainPath); return }
 
     $regBase = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
     Backup-WTRegistryKey -Key "$regBase\$Sid.bak" | Out-Null
@@ -238,7 +240,7 @@ function Repair-WTTempProfile {
     Rename-Item -LiteralPath $bak -NewName $Sid
     Set-ItemProperty -LiteralPath $main -Name State -Value 0 -Type DWord
     if ($null -ne (Get-ItemProperty -LiteralPath $main).RefCount) { Set-ItemProperty -LiteralPath $main -Name RefCount -Value 0 -Type DWord }
-    Write-WTLog "Key restored: the user will find the profile $bakPath again at the next sign-in." -Level OK
+    Write-WTLog (T 'Key restored: the user will find the profile {0} again at the next sign-in.' $bakPath) -Level OK
 
     if ($mainPath -and $mainPath -match '\\TEMP(\.[^\\]*)?$' -and (Test-Path -LiteralPath $mainPath)) {
         Remove-WTFolder -Path $mainPath | Out-Null

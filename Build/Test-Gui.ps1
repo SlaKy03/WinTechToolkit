@@ -1,9 +1,10 @@
 ﻿# Starts the UI off-screen, visits every section and saves a screenshot of each one.
-param([string]$Theme = 'Dark', [string]$OutDir = (Join-Path $env:TEMP 'wtsmoke'))
+param([string]$Theme = 'Dark', [string]$Language = 'en', [string]$OutDir = (Join-Path $env:TEMP 'wtsmoke'))
 $root = Split-Path $PSScriptRoot -Parent
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 $main = [IO.File]::ReadAllText((Join-Path $root 'WinTechToolkit.ps1'))
 $main = $main.Replace('if (-not ($isAdmin -and $isSTA -and $isDesktop -and -not $is32on64)) {', 'if ($false) {')
+$main = $main.Replace('Get-WTLanguage $settings.Language', "Get-WTLanguage '$Language'")
 $main = $main.Replace('$PSScriptRoot', "'$root'").Replace('$MyInvocation.MyCommand.Path', "'$root\WinTechToolkit.ps1'")
 $hook = @'
 $window.Left = -6000; $window.Top = 0; $window.ShowInTaskbar = $false

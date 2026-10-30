@@ -1,14 +1,18 @@
 ﻿# Disk cleanup and Windows Update reset.
 
-$script:WTCleanTargets = [ordered]@{
-    WinTemp        = 'Windows temporary files'
-    UserTemp       = 'Temporary files of all users'
-    WUCache        = 'Windows Update download cache'
-    DeliveryOpt    = 'Delivery Optimization cache'
-    RecycleBin     = 'Recycle Bin (all users and volumes)'
-    CrashDumps     = 'Crash dumps and error reports (WER)'
-    BrowserCache   = 'Browser cache (Edge, Chrome, Firefox)'
-    ComponentStore = 'WinSxS component store (DISM)'
+function Get-WTCleanTargetName {
+    # Name of a cleanup item in the interface language ($null if unknown)
+    param([string]$Target)
+    switch ($Target) {
+        'WinTemp' { T 'Windows temporary files' }
+        'UserTemp' { T 'Temporary files of all users' }
+        'WUCache' { T 'Windows Update download cache' }
+        'DeliveryOpt' { T 'Delivery Optimization cache' }
+        'RecycleBin' { T 'Recycle Bin (all users and volumes)' }
+        'CrashDumps' { T 'Crash dumps and error reports (WER)' }
+        'BrowserCache' { T 'Browser cache (Edge, Chrome, Firefox)' }
+        'ComponentStore' { T 'WinSxS component store (DISM)' }
+    }
 }
 
 function Get-WTCleanupPaths {
@@ -68,11 +72,11 @@ function Invoke-WTCleanup {
     param([Parameter(Mandatory)][string[]]$Targets, [switch]$AnalyzeOnly, [switch]$Simulate)
     $freeBefore = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'").FreeSpace
     $total = [int64]0
-    $verb = if ($AnalyzeOnly -or $Simulate) { 'recoverable' } else { 'freed' }
+    $verb = if ($AnalyzeOnly -or $Simulate) { T 'recoverable' } else { T 'freed' }
 
     foreach ($t in $Targets) {
-        $label = $script:WTCleanTargets[$t]
-        if (-not $label) { Write-WTLog "Unknown item: $t" -Level Warn; continue }
+        $label = Get-WTCleanTargetName $t
+        if (-not $label) { Write-WTLog (T 'Unknown item: {0}' $t) -Level Warn; continue }
         Write-WTLog "--- $label"
 
         if ($t -eq 'ComponentStore') {
@@ -109,10 +113,10 @@ function Invoke-WTCleanup {
         $total += $sum
     }
 
-    Write-WTLog ('TOTAL: {0} {1}' -f (Format-WTSize $total), $verb) -Level OK
+    Write-WTLog (T 'TOTAL: {0} {1}' (Format-WTSize $total) $verb) -Level OK
     if (-not $AnalyzeOnly -and -not $Simulate) {
         $freeAfter = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'").FreeSpace
-        Write-WTLog ('Free space on {0}: {1} -> {2}' -f $env:SystemDrive, (Format-WTSize $freeBefore), (Format-WTSize $freeAfter))
+        Write-WTLog (T 'Free space on {0}: {1} -> {2}' $env:SystemDrive (Format-WTSize $freeBefore) (Format-WTSize $freeAfter))
     }
 }
 
@@ -122,11 +126,11 @@ function Reset-WTWindowsUpdate {
     $services = 'wuauserv', 'bits', 'cryptsvc', 'msiserver'
     $folders = "$env:windir\SoftwareDistribution", "$env:windir\System32\catroot2"
     if ($Simulate) {
-        Write-WTLog "[SIMULATION] Would stop $($services -join ', '), rename $($folders -join ' and ') to .old and restart the services."
+        Write-WTLog (T '[SIMULATION] Would stop {0}, rename {1} to .old and restart the services.' ($services -join ', ') ($folders -join ', '))
         return
     }
     foreach ($s in $services) {
-        Write-WTLog "Stopping service $s..."
+        Write-WTLog (T 'Stopping service {0}...' $s)
         Stop-Service -Name $s -Force -ErrorAction SilentlyContinue
     }
     foreach ($f in $folders) {
@@ -135,14 +139,14 @@ function Reset-WTWindowsUpdate {
         if (Test-Path -LiteralPath $old) { Remove-WTFolder -Path $old | Out-Null }
         try {
             Rename-Item -LiteralPath $f -NewName (Split-Path $old -Leaf) -ErrorAction Stop
-            Write-WTLog "Renamed: $f -> $old" -Level OK
+            Write-WTLog (T 'Renamed: {0} -> {1}' $f $old) -Level OK
         } catch {
-            Write-WTLog "Could not rename $f : $($_.Exception.Message)" -Level Error
+            Write-WTLog (T 'Could not rename {0}: {1}' $f $_.Exception.Message) -Level Error
         }
     }
     foreach ($s in 'cryptsvc', 'bits', 'wuauserv') {
         Start-Service -Name $s -ErrorAction SilentlyContinue
-        Write-WTLog "Starting service $s"
+        Write-WTLog (T 'Starting service {0}' $s)
     }
     Write-WTLog 'Windows Update reset complete. Restart and search for updates again.' -Level OK
 }

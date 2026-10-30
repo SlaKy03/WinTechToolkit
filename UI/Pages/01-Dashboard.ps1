@@ -2,6 +2,7 @@
 
 function New-StatCard {
     param([string]$Id, [string]$Glyph, [string]$Label, [switch]$Bar)
+    $Label = (T $Label).ToUpper()
     $barXaml = if ($Bar) { "<ProgressBar x:Name=`"Dash${Id}Bar`" Height=`"5`" Margin=`"0,10,0,0`" Maximum=`"100`"/>" } else { '' }
 @"
 <Border Style="{StaticResource Card}" Margin="6" Padding="16,14">
@@ -38,20 +39,20 @@ function Update-WTDashboard {
         if (-not $s) { return }
         Set-WTDash 'Pc' $s.Computer "$($s.Model) · S/N $($s.Serial)"
         Set-WTDash 'Os' $s.OS $s.Version
-        $upSub = if ($s.PendingReboot) { "Restart pending ($($s.PendingText))" }
-        elseif ($s.PendingRenames) { "Last boot $($s.LastBoot) · file renames queued" } else { "Last boot $($s.LastBoot)" }
+        $upSub = if ($s.PendingReboot) { T 'Restart pending ({0})' $s.PendingText }
+        elseif ($s.PendingRenames) { T 'Last boot {0} · file renames queued' $s.LastBoot } else { T 'Last boot {0}' $s.LastBoot }
         Set-WTDash 'Up' $s.Uptime $upSub $(if ($s.PendingReboot -or $s.UptimeDays -ge 14) { 'Warn' })
         $diskLevel = if ($s.DiskUsedPct -ge 90) { 'Err' } elseif ($s.DiskUsedPct -ge 80) { 'Warn' } else { '' }
-        Set-WTDash 'Disk' "$($s.DiskFreeText) free" "of $($s.DiskTotalText) · $($s.DiskUsedPct)% used" $diskLevel
+        Set-WTDash 'Disk' (T '{0} free' $s.DiskFreeText) (T 'of {0} · {1}% used' $s.DiskTotalText $s.DiskUsedPct) $diskLevel
         $ui.DashDiskBar.Value = $s.DiskUsedPct
-        Set-WTDash 'Ram' $s.RamText "$($s.RamUsedPct)% in use" $(if ($s.RamUsedPct -ge 90) { 'Warn' })
+        Set-WTDash 'Ram' $s.RamText (T '{0}% in use' $s.RamUsedPct) $(if ($s.RamUsedPct -ge 90) { 'Warn' })
         $ui.DashRamBar.Value = $s.RamUsedPct
         Set-WTDash 'Net' $s.IP $s.Domain
-        Set-WTDash 'Sec' "BitLocker $($s.BitLocker)" "Secure Boot $($s.SecureBoot) · TPM $($s.Tpm)" $(if ($s.BitLocker -ne 'on') { 'Warn' })
+        Set-WTDash 'Sec' "BitLocker $(Get-WTStateText $s.BitLocker)" "Secure Boot $(Get-WTStateText $s.SecureBoot) · TPM $(Get-WTStateText $s.Tpm)" $(if ($s.BitLocker -ne 'on') { 'Warn' })
         $stabLevel = if ($s.Bsod) { 'Err' } elseif ($s.Unexpected -or $s.AppCrash -ge 5) { 'Warn' } else { 'Ok' }
-        $stabText = if ($s.Bsod -or $s.Unexpected) { "$($s.Bsod) BSODs · $($s.Unexpected) shutdowns" } else { 'No abnormal shutdowns' }
-        Set-WTDash 'Stab' $stabText "$($s.AppCrash) application crashes" $stabLevel
-        Set-WTHeaderInfo -Domain $s.Domain -User $s.User -Loaded
+        $stabText = if ($s.Bsod -or $s.Unexpected) { T '{0} BSODs · {1} shutdowns' $s.Bsod $s.Unexpected } else { T 'No abnormal shutdowns' }
+        Set-WTDash 'Stab' $stabText (T '{0} application crashes' $s.AppCrash) $stabLevel
+        Set-WTHeaderInfo -Domain $s.Domain -DomainName $s.DomainName -User $s.User -Loaded
     }
 }
 
@@ -60,16 +61,16 @@ $pageXaml = @"
   <StackPanel Margin="24,18,24,8">
     $(New-PageHeader 'Dashboard' "The state of the computer at a glance and the most used actions." (New-Pill -Name 'BtnDashRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5'))
     <UniformGrid x:Name="DashStats" Columns="4" Margin="-6,0,-6,8">
-      $(New-StatCard -Id 'Pc' -Glyph '&#xE7F4;' -Label 'COMPUTER')
-      $(New-StatCard -Id 'Os' -Glyph '&#xE770;' -Label 'WINDOWS')
-      $(New-StatCard -Id 'Up' -Glyph '&#xE823;' -Label 'UPTIME')
-      $(New-StatCard -Id 'Stab' -Glyph '&#xE9D9;' -Label 'STABILITY (7 DAYS)')
-      $(New-StatCard -Id 'Disk' -Glyph '&#xEDA2;' -Label 'SYSTEM DISK' -Bar)
-      $(New-StatCard -Id 'Ram' -Glyph '&#xE950;' -Label 'MEMORY' -Bar)
-      $(New-StatCard -Id 'Net' -Glyph '&#xE839;' -Label 'NETWORK AND DOMAIN')
-      $(New-StatCard -Id 'Sec' -Glyph '&#xE72E;' -Label 'SECURITY')
+      $(New-StatCard -Id 'Pc' -Glyph '&#xE7F4;' -Label 'Computer')
+      $(New-StatCard -Id 'Os' -Glyph '&#xE770;' -Label 'Windows')
+      $(New-StatCard -Id 'Up' -Glyph '&#xE823;' -Label 'Uptime')
+      $(New-StatCard -Id 'Stab' -Glyph '&#xE9D9;' -Label 'Stability (7 days)')
+      $(New-StatCard -Id 'Disk' -Glyph '&#xEDA2;' -Label 'System disk' -Bar)
+      $(New-StatCard -Id 'Ram' -Glyph '&#xE950;' -Label 'Memory' -Bar)
+      $(New-StatCard -Id 'Net' -Glyph '&#xE839;' -Label 'Network and domain')
+      $(New-StatCard -Id 'Sec' -Glyph '&#xE72E;' -Label 'Security')
     </UniformGrid>
-    <TextBlock Style="{StaticResource SectionTitle}" Text="Quick actions"/>
+    <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Quick actions')"/>
     <WrapPanel>
       $(New-Tile -Name 'QaDiagnose' -Glyph '&#xE9D9;' -Title 'Diagnose problems' -Desc 'BSODs, crashes, shutdowns and errors of the last 7 days')
       $(New-Tile -Name 'QaRepair' -Glyph '&#xE90F;' -Title 'Full repair' -Desc 'DISM RestoreHealth followed by SFC /scannow')
@@ -97,5 +98,5 @@ Register-WTPage -Id 'Dashboard' -Group 'Diagnostics' -Title 'Dashboard' -Glyph '
     On 'QaRestorePoint' { Start-WTTask 'Restore point' { New-WTRestorePoint | Out-Null } }
     On 'QaUpdates' { Select-WTPageById 'Updates'; Invoke-WTUpdateSearch }
     On 'QaGpupdate' { Start-WTTask 'gpupdate /force' { Invoke-WTGpUpdate -Target All } }
-    On 'QaIpRenew' { Invoke-WTIpAction 'ReleaseRenew' 'Release and renew IP' -AllAdapters }
+    On 'QaIpRenew' { Invoke-WTIpAction 'ReleaseRenew' (T 'Release and renew IP') -AllAdapters }
 }

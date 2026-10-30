@@ -127,12 +127,16 @@ Module\Functions\*.ps1    module functions, split by topic
 Module\Lang\*.psd1        interface translations (English is the source text)
 Build\Build.ps1           creates dist\WinTechToolkit.zip/.exe and their .sha256 files
 Build\Launcher.cs         source of the .exe launcher
-Build\Test-*.ps1          static checks and a UI run with screenshots
+Build\Test-*.ps1          static checks, safety checks of the delete functions, and a UI run with screenshots
 ```
 
 To add a section, create a new file in `UI\Pages` that calls `Register-WTPage`.
 `.ps1` files must be saved as **UTF-8 with BOM** (Windows PowerShell 5.1 otherwise misreads
-non-ASCII characters): `Build\Test-Toolkit.ps1 -FixBom` fixes it.
+non-ASCII characters): `Build\Test-Toolkit.ps1 -FixBom` fixes it. The exception is `start.ps1`,
+which must have **no** BOM because it is run with `irm | iex`.
+
+`Build\Test-Safety.ps1` checks that profiles, system paths and personal folders can never be
+deleted; it never deletes anything real outside folders it creates in `%LOCALAPPDATA%`.
 
 ## Publishing a release
 

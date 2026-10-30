@@ -12,6 +12,12 @@
   the toolkit; protected and too generic names are still excluded.
 - Report and diagnosis: healthy disks are no longer reported as a problem with "0 events"
   and printers show "Ready" instead of the code "0".
+- Safety: `Remove-WTFolder` now refuses profile folders and their personal folders (Documents,
+  Desktop, Downloads, AppData...) whoever calls it, not only the search; a whole profile is
+  deleted only through the profile functions. Found by the new `Build\Test-Safety.ps1`
+  (129 checks, also run on GitHub), which also covers the protected names and paths, the
+  profile protections, the leftovers search and the language fallback.
+- Programs and startup items: trailing spaces in the publisher and version are removed.
 
 ## 0.9.2-beta
 

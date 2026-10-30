@@ -1,4 +1,5 @@
-# Static checks (encoding, syntax, XAML, controls, functions) on every push and pull request
+# Static checks (encoding, syntax, XAML, controls, functions) and the safety checks of the
+# delete functions on every push and pull request
 name: Checks
 
 on:
@@ -18,3 +19,10 @@ jobs:
           $out = & .\Build\Test-Toolkit.ps1
           $out
           if ($out -match 'Syntax errors: [1-9]|missing BOM|must NOT have a BOM|Missing controls|Undefined functions|Missing translations \(|Different placeholders \(|Untranslated XAML texts:') { exit 1 }
+
+                - name: Safety checks
+                  shell: powershell
+                  run: |
+                    $out = & .\Build\Test-Safety.ps1
+                    $out | Select-Object -Last 15
+                    if ($out -match '^FAIL') { exit 1 }

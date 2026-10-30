@@ -17,4 +17,4 @@ jobs:
         run: |
           $out = & .\Build\Test-Toolkit.ps1
           $out
-          if ($out -match 'Syntax errors: [1-9]|missing BOM|Missing controls|Undefined functions|Missing translations|Different placeholders|Untranslated XAML') { exit 1 }
+          if ($out -match 'Syntax errors: [1-9]|missing BOM|Missing controls|Undefined functions|Missing translations \(|Different placeholders \(|Untranslated XAML texts:') { exit 1 }

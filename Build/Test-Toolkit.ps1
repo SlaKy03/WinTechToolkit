@@ -4,9 +4,13 @@ param([switch]$FixBom, [switch]$ListMissing)
 $root = Split-Path $PSScriptRoot -Parent
 $errs = 0
 $utf8Bom = New-Object Text.UTF8Encoding $true
+# start.ps1 is run with "irm | iex": a BOM would stay in the text as a character before "<#" and break it
+$noBom = @('start.ps1')
 Get-ChildItem $root -Recurse -Include *.ps1, *.psm1, *.psd1 | Where-Object { $_.FullName -notlike '*\.git\*' } | ForEach-Object {
     $bytes = [IO.File]::ReadAllBytes($_.FullName)
-    if ($bytes.Length -lt 3 -or $bytes[0] -ne 0xEF) {
+    if ($noBom -contains $_.Name) {
+        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF) { "$($_.Name): must NOT have a BOM (it is run with irm | iex)" }
+    } elseif ($bytes.Length -lt 3 -or $bytes[0] -ne 0xEF) {
         if ($FixBom) {
             $text = [IO.File]::ReadAllText($_.FullName, (New-Object Text.UTF8Encoding $false))
             [IO.File]::WriteAllText($_.FullName, $text, $utf8Bom)

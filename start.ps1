@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Run without installing anything:
         irm https://raw.githubusercontent.com/SlaKy03/WinTechToolkit/main/start.ps1 | iex

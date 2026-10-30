@@ -296,10 +296,27 @@ function Remove-WTFolder {
     .SYNOPSIS
         Deletes a folder even with denied permissions or long paths: first rd (which does not
         follow junctions), then ownership to Administrators and robocopy /MIR in backup mode.
+    .NOTES
+        Last line of defense, whoever calls it: system paths, the personal folders of a profile
+        (Documents, Desktop, AppData...) and the profile folders themselves are refused.
+        A whole profile folder is deleted only with -AllowProfileRoot, which is used only by the
+        profile functions (they check loaded, current and system profiles first).
     #>
-    param([Parameter(Mandatory)][string]$Path, [switch]$Simulate)
+    param([Parameter(Mandatory)][string]$Path, [switch]$Simulate, [switch]$AllowProfileRoot)
     $p = $Path.TrimEnd('\')
     if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p) {
+        Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
+        return $false
+    }
+    $profileFolders = @(Get-WTProfileFolders)
+    $isProfileRoot = $profileFolders -contains $p
+    $isPersonal = $false
+    foreach ($pr in $profileFolders) {
+        foreach ($sub in '\AppData', '\AppData\Roaming', '\AppData\Local', '\AppData\LocalLow', '\AppData\Local\Programs', '\Desktop', '\Documents', '\Downloads', '\Pictures', '\Music', '\Videos', '\OneDrive') {
+            if ($p -eq ($pr + $sub)) { $isPersonal = $true }
+        }
+    }
+    if ($isPersonal -or ($isProfileRoot -and -not $AllowProfileRoot)) {
         Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
         return $false
     }

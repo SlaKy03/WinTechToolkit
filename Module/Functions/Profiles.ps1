@@ -160,7 +160,7 @@ function Remove-WTUserProfile {
             if (-not $p.Path.StartsWith($profilesDir + '\', [StringComparison]::OrdinalIgnoreCase)) {
                 Write-WTLog (T 'Skipped: the folder is not under {0}' $profilesDir) -Level Warn; $ko++; continue
             }
-            if (Remove-WTFolder -Path $p.Path -Simulate:$Simulate) { $ok++ } else { $ko++ }
+            if (Remove-WTFolder -Path $p.Path -Simulate:$Simulate -AllowProfileRoot) { $ok++ } else { $ko++ }
             continue
         }
 
@@ -198,7 +198,7 @@ function Remove-WTUserProfile {
         }
         # 2) Leftover folders
         $allOk = $true
-        foreach ($f in $folders) { if (-not (Remove-WTFolder -Path $f -Simulate:$Simulate)) { $allOk = $false } }
+        foreach ($f in $folders) { if (-not (Remove-WTFolder -Path $f -Simulate:$Simulate -AllowProfileRoot)) { $allOk = $false } }
         # 3) Leftover registry keys
         Remove-WTProfileRegistryResidue -Sid $sid -KeyNames $keyNames -IncludeSidKeys:$fullDelete -Simulate:$Simulate
         if ($allOk) { $ok++ } else { $ko++ }
@@ -243,6 +243,6 @@ function Repair-WTTempProfile {
     Write-WTLog (T 'Key restored: the user will find the profile {0} again at the next sign-in.' $bakPath) -Level OK
 
     if ($mainPath -and $mainPath -match '\\TEMP(\.[^\\]*)?$' -and (Test-Path -LiteralPath $mainPath)) {
-        Remove-WTFolder -Path $mainPath | Out-Null
+        Remove-WTFolder -Path $mainPath -AllowProfileRoot | Out-Null
     }
 }

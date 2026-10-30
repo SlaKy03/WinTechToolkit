@@ -18,7 +18,10 @@ $repo = 'SlaKy03/WinTechToolkit'
         $base = "https://github.com/$repo/releases/latest/download/WinTechToolkit.zip"
         Write-Host "Downloading WinTech Toolkit from github.com/$repo ..."
         Invoke-WebRequest -Uri $base -OutFile $zip -UseBasicParsing
-        $expected = [regex]::Match((Invoke-WebRequest -Uri "$base.sha256" -UseBasicParsing).Content, '\b[0-9a-fA-F]{64}\b').Value
+        # GitHub serves the .sha256 as application/octet-stream: Content is then a byte array, not text
+        $shaText = (Invoke-WebRequest -Uri "$base.sha256" -UseBasicParsing).Content
+        if ($shaText -is [byte[]]) { $shaText = [Text.Encoding]::ASCII.GetString($shaText) }
+        $expected = [regex]::Match([string]$shaText, '\b[0-9a-fA-F]{64}\b').Value
         $sha = [Security.Cryptography.SHA256]::Create()
         $actual = [BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($zip))) -replace '-', ''
         $sha.Dispose()

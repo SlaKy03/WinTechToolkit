@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-- Fix: `irm ... | iex` failed with "term not recognized" because `start.ps1` had a BOM. The
-  static checks now fail if `start.ps1` has one.
+- Fix: `irm ... | iex` never worked. `start.ps1` had a BOM ("term not recognized") and, once
+  that was fixed, it failed the integrity check because GitHub serves the `.sha256` file as
+  binary and the hash was read from a byte array. The static checks now fail if `start.ps1`
+  has a BOM.
 - Events: the category being shown stays highlighted instead of always "Automatic diagnosis".
 - Programs: the manual leftovers search also lists folders and registry keys whose name
   contains the text (e.g. "Zoom" finds "ZoomVideoApps"), for programs uninstalled without

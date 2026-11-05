@@ -35,8 +35,7 @@ function Invoke-WTRemote {
         [hashtable]$Arguments = @{},
         [pscredential]$Credential
     )
-    $code = (Get-ChildItem (Join-Path $script:WTModuleRoot 'Functions') -Filter '*.ps1' | Sort-Object Name |
-            ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`r`n"
+    $code = $script:WTModuleCode
     # the remote PC has no language files: the translations travel with the code
     $lang = $global:WTLanguage
     $strings = @{}

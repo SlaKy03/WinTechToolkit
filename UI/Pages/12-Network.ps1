@@ -66,6 +66,7 @@ $pageXaml = @"
           $(New-Tile -Name 'BtnRegisterDns' -Glyph '&#xE8F4;' -Title 'Register in DNS' -Desc 'ipconfig /registerdns (the PC record in the domain)')
           $(New-Tile -Name 'BtnIpConfig' -Glyph '&#xE946;' -Title 'Full configuration' -Desc 'ipconfig /all in the activity log')
           $(New-Tile -Name 'BtnConnTest' -Glyph '&#xE9D9;' -Title 'Connectivity test' -Desc 'Gateway, DNS, HTTPS and proxy')
+          $(New-Tile -Name 'BtnWlanReport' -Glyph '&#xE701;' -Title 'Wi-Fi report' -Desc 'Sessions, disconnections and errors (netsh wlan show wlanreport)')
           $(New-Tile -Name 'BtnNetReset' -Glyph '&#xE7BA;' -Title 'Reset Winsock and TCP/IP' -Desc 'netsh winsock/int ip reset (requires a restart)' -Danger)
         </WrapPanel>
         <WrapPanel Margin="0,6,0,0">
@@ -110,6 +111,7 @@ Register-WTPage -Id 'Network' -Group 'Network' -Title 'Network and domain' -Glyp
     On 'BtnFlushDns' { Start-WTTask 'Flush DNS cache' { Clear-WTDnsCache } }
     On 'BtnRegisterDns' { Start-WTTask 'DNS registration' { Invoke-WTIpConfigAction -Action RegisterDns } }
     On 'BtnIpConfig' { Start-WTTask 'ipconfig /all' { Show-WTIpConfig } }
+    On 'BtnWlanReport' { Start-WTTask 'Wi-Fi report' { New-WTWlanReport } -OnComplete { param($r) Open-WTFile $r } }
     On 'BtnConnTest' { Start-WTTask 'Connectivity test' { Test-WTConnectivity } }
     On 'BtnPortTest' {
         $h = $ui.TxtPortHost.Text.Trim()

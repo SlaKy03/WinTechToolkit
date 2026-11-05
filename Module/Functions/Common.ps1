@@ -78,8 +78,13 @@ function Get-WTText {
         if ($script:WTStringsLanguage -ne $lang) {
             $script:WTStringsLanguage = $lang
             $script:WTStrings = @{}
-            $file = if ($script:WTModuleRoot) { Join-Path $script:WTModuleRoot "Lang\$lang.psd1" } else { '' }
-            if ($file -and (Test-Path -LiteralPath $file)) { try { $script:WTStrings = Read-WTStringTable $file } catch { } }
+            # the interface passes the table already read to its runspaces ($global:WTStringTables)
+            if ($global:WTStringTables -is [hashtable] -and $global:WTStringTables.ContainsKey($lang)) {
+                $script:WTStrings = $global:WTStringTables[$lang]
+            } else {
+                $file = if ($script:WTModuleRoot) { Join-Path $script:WTModuleRoot "Lang\$lang.psd1" } else { '' }
+                if ($file -and (Test-Path -LiteralPath $file)) { try { $script:WTStrings = Read-WTStringTable $file } catch { } }
+            }
         }
         $t = $script:WTStrings[$Text]
         if ($t) { $Text = $t }
@@ -273,6 +278,36 @@ function Test-WTProtectedName {
     ($script:WTProtectedNames -contains $Name.Trim()) -or ($Name -match '^(Microsoft|Windows)\b')
 }
 
+function ConvertTo-WTLongPath {
+    # C:\Users\ABCDEF~1\... -> C:\Users\abcdef.xyz\... (%TEMP% is often in 8.3 form, the paths
+    # returned by Windows when listing folders are long). Parts that do not exist are kept.
+    param([string]$Path)
+    if (-not $Path -or $Path -notlike '*~*') { return $Path }
+    $long = [IO.Path]::GetPathRoot($Path)
+    foreach ($part in $Path.Substring($long.Length).Split('\', [StringSplitOptions]::RemoveEmptyEntries)) {
+        $match = $null
+        try { $match = @([IO.Directory]::GetFileSystemEntries($long, $part)) | Select-Object -First 1 } catch { }
+        $long = if ($match) { $match } else { Join-Path $long $part }
+    }
+    $long
+}
+
+function Test-WTToolkitPath {
+    <#
+    .SYNOPSIS
+        $true if deleting the path would delete the running toolkit: its folder, a folder that
+        contains it, or the folder of another running copy (%TEMP%\WinTechToolkit_*).
+    .NOTES
+        With the exe and irm | iex the toolkit runs from %TEMP%: emptying the temp folders
+        deleted its own files, and the operations that followed failed with "not recognized".
+    #>
+    param([string]$Path)
+    if (-not $Path -or -not $script:WTToolkitRoot) { return $false }
+    $p = (ConvertTo-WTLongPath $Path).TrimEnd('\')
+    if (Test-WTPathRelated -A $p -B (ConvertTo-WTLongPath $script:WTToolkitRoot)) { return $true }
+    (Split-Path $p -Leaf) -like 'WinTechToolkit_*' -and (Split-Path (Split-Path $p -Parent) -Leaf) -eq 'Temp'
+}
+
 function Test-WTProtectedPath {
     # $true for system paths or roots that must never be offered as a leftover
     param([string]$Path, [string[]]$ProfileFolders)
@@ -280,6 +315,7 @@ function Test-WTProtectedPath {
     $p = $Path.TrimEnd('\')
     if ($p.Length -le 3) { return $true }
     if ((Get-WTCriticalPaths) -contains $p) { return $true }
+    if (Test-WTToolkitPath $p) { return $true }
     if ($p.StartsWith($env:windir + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
     if (Test-WTProtectedName (Split-Path $p -Leaf)) { return $true }
     if (-not $ProfileFolders) { $ProfileFolders = Get-WTProfileFolders }
@@ -304,7 +340,7 @@ function Remove-WTFolder {
     #>
     param([Parameter(Mandatory)][string]$Path, [switch]$Simulate, [switch]$AllowProfileRoot)
     $p = $Path.TrimEnd('\')
-    if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p) {
+    if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p -or (Test-WTToolkitPath $p)) {
         Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
         return $false
     }
@@ -355,6 +391,7 @@ function Remove-WTTreeBestEffort {
     try { $items = $Directory.GetFileSystemInfos() } catch { return }
     foreach ($i in $items) {
         if ($i -is [IO.DirectoryInfo]) {
+            if (Test-WTToolkitPath $i.FullName) { continue }
             if ($i.Attributes -band [IO.FileAttributes]::ReparsePoint) { try { $i.Delete() } catch { } }
             else {
                 Remove-WTTreeBestEffort -Directory $i

@@ -97,6 +97,15 @@ function Show-WTKerberosTicket {
     foreach ($l in (Invoke-WTUserContext -UserName $UserName -Script 'klist')) { Write-WTLog "  $l" }
 }
 
+function Reset-WTWindowsHello {
+    # Deletes the Windows Hello container (PIN, fingerprint, face) of the signed-in user, in their
+    # session. Fixes "PIN not available" / "something went wrong with your PIN".
+    param([Parameter(Mandatory)][string]$UserName, [switch]$Simulate)
+    if ($Simulate) { Write-WTLog (T '[SIMULATION] Would delete the Windows Hello container (PIN) of {0}' $UserName); return }
+    foreach ($l in (Invoke-WTUserContext -UserName $UserName -Script 'certutil.exe -DeleteHelloContainer')) { if ($l.Trim()) { Write-WTLog "  $l" } }
+    Write-WTLog (T 'Windows Hello reset for {0}: after signing out they sign in with the password and set up a new PIN.' $UserName) -Level OK
+}
+
 function Get-WTGroupMember {
     <#
     .SYNOPSIS

@@ -74,6 +74,21 @@ function Invoke-WTIpConfigAction {
     }
 }
 
+function New-WTWlanReport {
+    # netsh wlan show wlanreport: Wi-Fi sessions, disconnections and errors of the last days
+    if (-not (Get-Service WlanSvc -ErrorAction SilentlyContinue)) {
+        Write-WTLog 'WLAN AutoConfig service not present: this computer has no Wi-Fi adapter.' -Level Warn
+        return
+    }
+    $r = Invoke-WTProcess -FilePath 'netsh.exe' -Arguments 'wlan show wlanreport'
+    $src = Join-Path $env:ProgramData 'Microsoft\Windows\WlanReport\wlan-report-latest.html'
+    if ($r.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $src)) { Write-WTLog 'Could not create the Wi-Fi report.' -Level Error; return }
+    $file = Join-Path (Get-WTDataFolder) ('Report\Wlan_{0}_{1:yyyyMMdd_HHmm}.html' -f $env:COMPUTERNAME, (Get-Date))
+    Copy-Item -LiteralPath $src -Destination $file -Force
+    Write-WTLog (T 'Wi-Fi report created: {0}' $file) -Level OK
+    $file
+}
+
 function Export-WTGpResult {
     <# HTML report of the applied policies (gpresult) for the computer and the signed-in user. #>
     $file = Join-Path (Get-WTDataFolder) ('Report\GPResult_{0}_{1:yyyyMMdd_HHmm}.html' -f $env:COMPUTERNAME, (Get-Date))

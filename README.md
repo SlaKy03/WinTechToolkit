@@ -59,7 +59,7 @@ If in doubt, use the zip and read the scripts first.
 | Users | **User profiles** | Real last use and size, TEMP and `.bak` profiles, orphan folders, selection of unused profiles, full deletion, temporary profile repair |
 | | **Credentials and access** | Credential Manager of the signed-in user, Kerberos tickets (user and computer), members of Administrators, Remote Desktop Users and Users |
 | | **Office and Teams** | Quick/online repair and update of Office, Teams cache, Microsoft 365 sign-in and license, .ost files, Outlook safe mode, OneDrive reset |
-| Software | **Programs and leftovers** | Silent uninstall (MSI, Inno Setup, NSIS) and search for leftovers: folders, registry, services, tasks, shortcuts |
+| Software | **Programs and apps** | Two tabs: desktop programs (silent uninstall: MSI, Inno Setup, NSIS) and Microsoft Store apps (removal for all users and new users); search for leftovers: folders, registry, services, tasks, shortcuts, app data |
 | | **Startup and tasks** | Startup programs of all users and scheduled tasks, with reversible disabling |
 | Network | **Network and domain** | Adapters, IP release/renew, DNS, connectivity and port tests, Winsock reset, gpupdate, gpresult, domain trust, time |
 | | **Printers** | Queues and status, test page, connecting shared printers (for everyone or one user), removing printers and unused drivers, spooler |

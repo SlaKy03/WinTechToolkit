@@ -92,7 +92,7 @@ $pageXaml = @"
           $(New-Pill -Name 'BtnTaskDisable' -Glyph '&#xE711;' -Text 'Disable')
           $(New-Pill -Name 'BtnTaskEnable' -Glyph '&#xE73E;' -Text 'Enable')
           $(New-Pill -Name 'BtnTaskRefresh' -Glyph '&#xE72C;' -Text 'Refresh')
-          <CheckBox x:Name="ChkTasksMs" Style="{StaticResource Switch}" Content="$(TX 'Include Windows tasks')" Margin="6,0,10,6"/>
+          <CheckBox x:Name="ChkTasksMs" Style="{StaticResource Switch}" Content="$(TX 'Include Windows tasks')"/>
           $(New-Pill -Name 'BtnTaskSchd' -Glyph '&#xE823;' -Text 'Task Scheduler')
           <TextBlock x:Name="TxtTasksCount" Style="{StaticResource Counter}" Text="$(TX 'Loading...')"/>
         </WrapPanel>

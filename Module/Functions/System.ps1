@@ -299,6 +299,52 @@ function New-WTRestorePoint {
     }
 }
 
+function Get-WTProblemDevice {
+    # Devices with a problem in Device Manager (yellow triangle), with the meaning of the code
+    $codes = @{
+        1 = 'Not configured correctly'; 3 = 'Driver corrupted or not enough memory'; 10 = 'Cannot start'; 12 = 'Not enough free resources'
+        14 = 'Restart required'; 18 = 'Drivers must be reinstalled'; 19 = 'Configuration in the registry damaged'; 21 = 'Being removed'
+        22 = 'Disabled'; 24 = 'Not present or not working'; 28 = 'Drivers not installed'; 29 = 'Disabled by the firmware'
+        31 = 'Not working properly'; 32 = 'Driver service disabled'; 37 = 'Driver failed to initialize'; 39 = 'Driver missing or corrupted'
+        43 = 'Stopped after reporting problems'; 48 = 'Driver blocked because of known problems'; 52 = 'Driver signature not verified'
+    }
+    # 45 = not connected right now (e.g. a USB disk used in the past): not a problem
+    $devs = @(Get-CimInstance Win32_PnPEntity -Filter 'ConfigManagerErrorCode <> 0' -ErrorAction SilentlyContinue | Where-Object { $_.ConfigManagerErrorCode -ne 45 })
+    if (-not $devs.Count) { Write-WTLog 'No devices with problems in Device Manager.' -Level OK; return }
+    Write-WTLog (T 'Devices with problems: {0}' $devs.Count) -Level Warn
+    foreach ($d in $devs | Sort-Object PNPClass, Name) {
+        $c = [int]$d.ConfigManagerErrorCode
+        $meaning = if ($codes.ContainsKey($c)) { T $codes[$c] } else { T 'Problem' }
+        $name = if ($d.Name) { $d.Name } else { $d.DeviceID }
+        Write-WTLog (T '  [{0}] {1} - code {2}: {3}' $d.PNPClass $name $c $meaning) -Level Warn
+        Write-WTLog "      $($d.DeviceID)"
+        [pscustomobject]@{ Class = $d.PNPClass; Name = $name; Code = $c; Problem = $meaning; DeviceId = $d.DeviceID }
+    }
+    Write-WTLog 'Code 28/39: install the driver from the manufacturer; 43: disconnect the device or update the driver; 22: enable it in Device Manager.'
+}
+
+function Get-WTBitLockerRecoveryKey {
+    # Recovery passwords of the BitLocker volumes. Returned to the caller, never written to the log.
+    try {
+        $vols = @(Get-CimInstance -Namespace 'root/cimv2/Security/MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -ErrorAction Stop)
+    } catch {
+        Write-WTLog (T 'BitLocker information not available: {0}' $_.Exception.Message) -Level Error
+        return
+    }
+    $keys = foreach ($v in $vols) {
+        # 3 = numerical password (the 48-digit recovery key)
+        $ids = Invoke-CimMethod -InputObject $v -MethodName GetKeyProtectors -Arguments @{ KeyProtectorType = [uint32]3 } -ErrorAction SilentlyContinue
+        foreach ($id in @($ids.VolumeKeyProtectorID | Where-Object { $_ })) {
+            $pw = Invoke-CimMethod -InputObject $v -MethodName GetKeyProtectorNumericalPassword -Arguments @{ VolumeKeyProtectorID = $id } -ErrorAction SilentlyContinue
+            if ($pw.NumericalPassword) { [pscustomobject]@{ Drive = $v.DriveLetter; Id = $id; Key = $pw.NumericalPassword } }
+        }
+    }
+    $keys = @($keys)
+    if (-not $keys.Count) { Write-WTLog 'No BitLocker recovery key on this computer (volumes not encrypted or protected only by the TPM).' -Level Warn; return }
+    Write-WTLog (T 'BitLocker recovery keys: {0} (shown on screen, not saved in the log).' $keys.Count) -Level OK
+    $keys
+}
+
 function New-WTBatteryReport {
     # powercfg battery report; returns the path of the HTML file
     if (-not (Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue)) {

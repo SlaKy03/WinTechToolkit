@@ -43,14 +43,14 @@ $pageXaml = @"
     <RowDefinition Height="*" MinHeight="120"/>
   </Grid.RowDefinitions>
   $(New-PageHeader 'Windows Update' 'Available updates, installation from the toolkit, history with error codes and component reset.' (New-Pill -Name 'BtnUpdSettings' -Glyph '&#xE713;' -Text 'Windows Update settings'))
-  <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,12,12,6" Margin="0,0,0,10">
+  <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,12,12,4" Margin="0,0,0,10">
     <WrapPanel>
       $(New-Pill -Name 'BtnUpdSearch' -Glyph '&#xE721;' -Text 'Search for updates' -Primary)
       $(New-Pill -Name 'BtnUpdInstallSel' -Glyph '&#xE896;' -Text 'Install selected')
       $(New-Pill -Name 'BtnUpdInstallAll' -Glyph '&#xE896;' -Text 'Install all')
-      <CheckBox x:Name="ChkUpdOnline" Style="{StaticResource Switch}" Content="$(TX 'Directly from Microsoft')" Margin="6,0,6,6"
+      <CheckBox x:Name="ChkUpdOnline" Style="{StaticResource Switch}" Content="$(TX 'Directly from Microsoft')"
                 ToolTip="$(TX 'Queries Windows Update even if the PC is managed by WSUS or corporate policies.')"/>
-      <CheckBox x:Name="ChkUpdDrivers" Style="{StaticResource Switch}" Content="$(TX 'Include drivers')" Margin="6,0,10,6"/>
+      <CheckBox x:Name="ChkUpdDrivers" Style="{StaticResource Switch}" Content="$(TX 'Include drivers')"/>
       $(New-Pill -Name 'BtnUpdScan' -Glyph '&#xE72C;' -Text 'Background scan' -ToolTip 'UsoClient StartScan: like "Check for updates"')
       $(New-Pill -Name 'BtnResetWU' -Glyph '&#xE7BA;' -Text 'Reset components' -Danger -ToolTip 'Stops the services, renames SoftwareDistribution and catroot2')
       <TextBlock x:Name="TxtUpdCount" Style="{StaticResource Counter}"/>

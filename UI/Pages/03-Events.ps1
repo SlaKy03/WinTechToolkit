@@ -102,7 +102,7 @@ $pageXaml = @"
   </Border>
   <WrapPanel Grid.Row="2" Margin="0,0,0,4">
     <TextBox x:Name="TxtEvtFilter" Style="{StaticResource SearchBox}" Width="240" Tag="$(TX 'Filter events (Ctrl+F)')"/>
-    <CheckBox x:Name="ChkEvtErrorsOnly" Style="{StaticResource Switch}" Content="$(TX 'Errors and critical only')" Margin="4,0,10,6"/>
+    <CheckBox x:Name="ChkEvtErrorsOnly" Style="{StaticResource Switch}" Content="$(TX 'Errors and critical only')"/>
     $(New-Pill -Name 'BtnEvtReport' -Glyph '&#xE8A5;' -Text 'Diagnosis report')
     $(New-Pill -Name 'BtnEvtExport' -Glyph '&#xE74E;' -Text 'Export CSV')
     $(New-Pill -Name 'BtnEvtViewer' -Glyph '&#xE81C;' -Text 'Event Viewer')

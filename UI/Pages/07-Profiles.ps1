@@ -40,7 +40,7 @@ $pageXaml = @"
   <StackPanel DockPanel.Dock="Top">
     $(New-PageHeader 'User profiles' 'Registered profiles, orphan folders and temporary profiles, with size and last use.')
   </StackPanel>
-  <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,12,12,6" Margin="0,0,0,10">
+  <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,12,12,4" Margin="0,0,0,10">
     <StackPanel>
       <WrapPanel>
         $(New-Pill -Name 'BtnProfRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')

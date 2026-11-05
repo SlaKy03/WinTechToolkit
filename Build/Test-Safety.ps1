@@ -60,8 +60,13 @@ $report = & $mod {
         }
         # the personal folders stay protected even for the profile functions
         C "Remove-WTFolder refuses $leaf\Documents even with -AllowProfileRoot" (-not (Remove-WTFolder -Path "$pr\Documents" -Simulate -AllowProfileRoot 6>$null 3>$null))
-        # a whole profile is deleted only on request (Simulate: nothing is touched)
-        C "Remove-WTFolder accepts the profile folder $leaf with -AllowProfileRoot (Simulate)" ([bool](Remove-WTFolder -Path $pr -Simulate -AllowProfileRoot 6>$null 3>$null))
+        # a whole profile is deleted only on request (Simulate: nothing is touched), never the one
+        # that contains the running toolkit (e.g. run from the Desktop or from %TEMP%)
+        if (Test-WTToolkitPath $pr) {
+            C "Remove-WTFolder refuses the profile folder $leaf that contains the toolkit" (-not (Remove-WTFolder -Path $pr -Simulate -AllowProfileRoot 6>$null 3>$null))
+        } else {
+            C "Remove-WTFolder accepts the profile folder $leaf with -AllowProfileRoot (Simulate)" ([bool](Remove-WTFolder -Path $pr -Simulate -AllowProfileRoot 6>$null 3>$null))
+        }
     }
     # legitimate uses keep working: a leftover folder of an application
     $legit = Join-Path $env:LOCALAPPDATA 'WTSafetyLegitFolder'
@@ -130,6 +135,47 @@ $report = & $mod {
         Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    # --- 7a. Store apps: the ones Windows needs are never removed --------------------------------
+    foreach ($n in 'Microsoft.WindowsStore', 'Microsoft.DesktopAppInstaller', 'Microsoft.SecHealthUI', 'Microsoft.MicrosoftEdge.Stable',
+        'Microsoft.VCLibs.140.00', 'Microsoft.UI.Xaml.2.8', 'Microsoft.WindowsAppRuntime.1.5', 'Microsoft.LanguageExperiencePackit-IT') {
+        C "Store app protected: $n" (Test-WTStoreAppProtected $n)
+    }
+    C 'Store app not protected: Microsoft.WindowsCalculator' (-not (Test-WTStoreAppProtected 'Microsoft.WindowsCalculator'))
+    # a protected app passed to the remove function anyway (no -Simulate: it must refuse before acting)
+    $fakeStore = [pscustomobject]@{ DisplayName = 'Microsoft Store'; Name = 'Microsoft.WindowsStore'; Version = '1'; Protected = $false
+        Provisioned = $false; ProvisionedName = $null; PackageFullName = 'Microsoft.WindowsStore_0.0.0.0_x64__8wekyb3d8bbwe'; PackageFamilyName = 'Microsoft.WindowsStore_8wekyb3d8bbwe' }
+    $res = @(Remove-WTStoreApp -InputObject $fakeStore 6>$null 3>$null 4>$null)
+    C 'Remove-WTStoreApp refuses Microsoft Store even if not marked as protected' ($res.Count -eq 0)
+    # leftovers are only proposed for a well-formed family name, never for a generic path
+    foreach ($pfn in '', '..', 'Packages', '..\..\Desktop', 'Microsoft.WindowsCalculator') {
+        $r = @(Find-WTStoreAppResidue -App ([pscustomobject]@{ DisplayName = 'x'; PackageFamilyName = $pfn }) 6>$null 3>$null 4>$null)
+        C "Store leftovers: nothing for family name '$pfn'" ($r.Count -eq 0)
+    }
+
+    # --- 7b. The folder the toolkit runs from (and other running copies) is never deleted ------
+    C 'toolkit folder is protected' (Test-WTProtectedPath -Path $script:WTToolkitRoot -ProfileFolders $profiles)
+    C 'a folder containing the toolkit is protected' (Test-WTToolkitPath (Split-Path $script:WTToolkitRoot -Parent))
+    C 'a folder inside the toolkit is protected' (Test-WTToolkitPath (Join-Path $script:WTToolkitRoot 'Module'))
+    C 'another running copy in a Temp folder is protected' (Test-WTToolkitPath (Join-Path $tempRoot 'WinTechToolkit_0123456789'))
+    C 'an unrelated temp folder is not protected' (-not (Test-WTToolkitPath (Join-Path $tempRoot 'SomeSetup_123')))
+    C 'Remove-WTFolder refuses the toolkit folder' (-not (Remove-WTFolder -Path $script:WTToolkitRoot -Simulate 6>$null 3>$null 4>$null))
+    $fakeTemp = Join-Path $tempRoot ('wt_safety_' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $copy = Join-Path $fakeTemp 'WinTechToolkit_running'
+    try {
+        New-Item -ItemType Directory -Path $copy, (Join-Path $fakeTemp 'junk') -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $copy 'WinTechToolkit.ps1') -Value 'x'
+        Set-Content -LiteralPath (Join-Path $fakeTemp 'junk\a.tmp') -Value 'x'
+        # $copy is in 8.3 form when %TEMP% is (C:\Users\ABCDEF~1\...): the check must still match
+        $saved = $script:WTToolkitRoot
+        $script:WTToolkitRoot = $copy
+        Remove-WTTreeBestEffort -Directory (New-Object IO.DirectoryInfo $fakeTemp)
+        $script:WTToolkitRoot = $saved
+        C 'emptying a temp folder keeps the running toolkit files' (Test-Path -LiteralPath (Join-Path $copy 'WinTechToolkit.ps1'))
+        C 'emptying a temp folder still deletes the rest' (-not (Test-Path -LiteralPath (Join-Path $fakeTemp 'junk')))
+    } finally {
+        Remove-Item -LiteralPath $fakeTemp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     [pscustomobject]@{ Lines = $out.ToArray(); Pass = $script:p; Fail = $script:f }
 } $env:TEMP
 
@@ -142,6 +188,11 @@ $startBytes = [IO.File]::ReadAllBytes((Join-Path $root 'start.ps1'))
 Check 'start.ps1 has no BOM (it is run with irm | iex)' (-not ($startBytes.Length -ge 3 -and $startBytes[0] -eq 0xEF))
 $startText = [Text.Encoding]::UTF8.GetString($startBytes)
 Check 'start.ps1 decodes the .sha256 when it arrives as bytes' ($startText.Contains('-is [byte[]]'))
+
+# --- 8b. The operations keep working if the toolkit files are deleted during the session --------
+$mainText = [IO.File]::ReadAllText((Join-Path $root 'WinTechToolkit.ps1'))
+Check 'a runspace created after the files are gone loads the module from memory' ($mainText.Contains('New-Module -Name WinTechToolkit') -and $mainText.Contains("'WTModuleSource'"))
+Check 'the translations are passed to the runspaces' ($mainText.Contains("'WTStringTables'"))
 
 # --- 9. Language fallback: a language without a translation file falls back to English ----------
 $script:WTSimLang = $null

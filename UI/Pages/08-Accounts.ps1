@@ -68,14 +68,18 @@ $pageXaml = @"
           <TextBlock x:Name="TxtCredCount" Style="{StaticResource Counter}"/>
         </WrapPanel>
       </StackPanel>
-      <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-        <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Text="$(TX 'Kerberos tickets')"/>
+      <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+        <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Kerberos tickets')"/>
         <WrapPanel>
           $(New-Pill -Name 'BtnKrbShow' -Glyph '&#xE8A5;' -Text 'Show user tickets')
           $(New-Pill -Name 'BtnKrbUser' -Glyph '&#xE72C;' -Text 'Purge user tickets' -ToolTip 'klist purge in the session: new groups and passwords apply without signing out')
           $(New-Pill -Name 'BtnKrbComputer' -Glyph '&#xE7F4;' -Text 'Purge computer tickets' -ToolTip 'klist -li 0x3e7 purge: new computer groups without a restart')
         </WrapPanel>
-      </DockPanel>
+        <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Windows Hello')" Margin="0,6,0,10"/>
+        <WrapPanel>
+          $(New-Pill -Name 'BtnHelloReset' -Glyph '&#xE8D7;' -Text 'Reset PIN and Windows Hello' -Danger -ToolTip 'certutil -DeleteHelloContainer in the session: PIN not available or not working')
+        </WrapPanel>
+      </StackPanel>
       <DataGrid x:Name="GridCreds" Margin="0,4,0,0">
         <DataGrid.ContextMenu>
           <ContextMenu>
@@ -161,6 +165,13 @@ Register-WTPage -Id 'Accounts' -Group 'Users' -Title 'Credentials and access' -G
     On 'BtnKrbUser' {
         $u = Get-WTSelectedUser 'UsersAccounts' -RequireLoggedOn
         if ($u) { Start-WTTask (T 'Purge tickets of {0}' $u.UserName) { param($User) Clear-WTKerberosTicket -Scope User -UserName $User } -Parameters @{ User = $u.UserName } }
+    }
+    On 'BtnHelloReset' {
+        $u = Get-WTSelectedUser 'UsersAccounts' -RequireLoggedOn
+        if (-not $u) { return }
+        if (-not (Show-WTConfirm (T "Delete PIN, fingerprint and face recognition of {0}?`n`nThe user must know their password: after signing out they sign in with it and set up a new PIN." $u.UserName))) { return }
+        Start-WTTask (T 'Windows Hello reset for {0}' $u.UserName) { param($User, $Simulate) Reset-WTWindowsHello -UserName $User -Simulate:$Simulate } `
+            -Parameters @{ User = $u.UserName; Simulate = Get-WTSimulate }
     }
     On 'BtnKrbComputer' { Start-WTTask 'Purge computer tickets' { Clear-WTKerberosTicket -Scope Computer } }
     On 'BtnGroupRefresh' { Update-WTGroupMembers }

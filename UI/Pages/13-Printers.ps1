@@ -26,7 +26,7 @@ $pageXaml = @"
     <RowDefinition Height="Auto"/>
   </Grid.RowDefinitions>
   $(New-PageHeader 'Printers' 'Installed printers and print queues, connecting shared printers, unused drivers and spooler.' (New-Pill -Name 'BtnPrintMgmt' -Glyph '&#xE749;' -Text 'Print Management'))
-  <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,12,12,6" Margin="0,0,0,10">
+  <Border Grid.Row="1" Style="{StaticResource Card}" Padding="12,12,12,4" Margin="0,0,0,10">
     <WrapPanel>
       $(New-Pill -Name 'BtnPrinterRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')
       $(New-Pill -Name 'BtnPrinterTest' -Glyph '&#xE749;' -Text 'Test page')

@@ -24,7 +24,16 @@ function Save-SmokeShot([string]$FileName) {
 $smoke.Add_Tick({
     $i = $script:SmokeStep
     if ($i -gt 0 -and $i -le $script:Pages.Count) {
-        Save-SmokeShot ('{0:00}-{1}.png' -f $i, $script:Pages[$i - 1].Id)
+        $id = $script:Pages[$i - 1].Id
+        if ($script:StoreShot -eq 1) {
+            # second tab of Programs and apps
+            Save-SmokeShot ('{0:00}b-{1}-store.png' -f $i, $id)
+            $ui.TabProgDesktop.IsChecked = $true
+            $script:StoreShot = 2
+        } else {
+            Save-SmokeShot ('{0:00}-{1}.png' -f $i, $id)
+            if ($id -eq 'Programs' -and -not $script:StoreShot) { $ui.TabProgStore.IsChecked = $true; $script:StoreShot = 1; return }
+        }
     }
     if ($i -ge $script:Pages.Count) {
         if ($script:SmokeStep -eq $script:Pages.Count) {
@@ -44,6 +53,7 @@ $smoke.Add_Tick({
         $lines = @($script:LogItems | ForEach-Object { $_.Line })
         Set-Content -LiteralPath (Join-Path '__OUT__' 'log.txt') -Value $lines -Encoding UTF8
         $script:CurrentJob = $null
+        $script:NoCloseConfirm = $true
         $window.Close()
         return
     }

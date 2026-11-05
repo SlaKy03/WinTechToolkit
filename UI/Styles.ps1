@@ -73,8 +73,10 @@ function Get-WTStyleXaml {
   <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
   <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
   <Setter Property="BorderThickness" Value="1"/>
-  <Setter Property="Padding" Value="12,6"/>
-  <Setter Property="Margin" Value="0,0,6,6"/>
+  <Setter Property="Padding" Value="12,0"/>
+  <Setter Property="MinHeight" Value="32"/>
+  <Setter Property="Margin" Value="0,0,8,8"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
   <Setter Property="Cursor" Value="Hand"/>
   <Setter Property="HorizontalContentAlignment" Value="Center"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
@@ -147,7 +149,7 @@ function Get-WTStyleXaml {
 </Style>
 <Style x:Key="CaptionButton" TargetType="Button">
   <Setter Property="Width" Value="46"/>
-  <Setter Property="Height" Value="48"/>
+  <Setter Property="Height" Value="52"/>
   <Setter Property="Background" Value="Transparent"/>
   <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
   <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
@@ -220,11 +222,13 @@ function Get-WTStyleXaml {
 </Style>
 <Style x:Key="Chip" TargetType="RadioButton">
   <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-  <Setter Property="Margin" Value="0,0,6,6"/>
+  <Setter Property="Margin" Value="0,0,8,8"/>
+  <Setter Property="MinHeight" Value="30"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
   <Setter Property="Cursor" Value="Hand"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
-    <Border x:Name="Bd" CornerRadius="13" Padding="12,4" BorderThickness="1" BorderBrush="{DynamicResource LineBrush}" Background="{DynamicResource CardBrush}">
-      <ContentPresenter HorizontalAlignment="Center"/>
+    <Border x:Name="Bd" CornerRadius="15" Padding="14,0" BorderThickness="1" BorderBrush="{DynamicResource LineBrush}" Background="{DynamicResource CardBrush}">
+      <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Border>
     <ControlTemplate.Triggers>
       <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
@@ -261,7 +265,8 @@ function Get-WTStyleXaml {
 </Style>
 <Style x:Key="Switch" TargetType="CheckBox">
   <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-  <Setter Property="Margin" Value="8,4"/>
+  <Setter Property="Margin" Value="4,0,14,8"/>
+  <Setter Property="MinHeight" Value="32"/>
   <Setter Property="Cursor" Value="Hand"/>
   <Setter Property="VerticalAlignment" Value="Center"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
@@ -287,8 +292,9 @@ function Get-WTStyleXaml {
   <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
   <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
   <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}"/>
-  <Setter Property="Padding" Value="6,4"/>
-  <Setter Property="Margin" Value="0,0,6,6"/>
+  <Setter Property="Padding" Value="8,4"/>
+  <Setter Property="MinHeight" Value="32"/>
+  <Setter Property="Margin" Value="0,0,8,8"/>
   <Setter Property="VerticalContentAlignment" Value="Center"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
     <Border x:Name="Bd" CornerRadius="6" BorderThickness="1" BorderBrush="{TemplateBinding BorderBrush}" Background="{TemplateBinding Background}">
@@ -300,7 +306,8 @@ function Get-WTStyleXaml {
   </ControlTemplate></Setter.Value></Setter>
 </Style>
 <Style x:Key="SearchBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-  <Setter Property="Padding" Value="28,5,6,5"/>
+  <Setter Property="Padding" Value="28,0,8,0"/>
+  <Setter Property="VerticalAlignment" Value="Center"/>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
     <Border x:Name="Bd" CornerRadius="6" BorderThickness="1" BorderBrush="{TemplateBinding BorderBrush}" Background="{TemplateBinding Background}">
       <Grid>
@@ -477,11 +484,11 @@ function Get-WTStyleXaml {
 </Style>
 <Style x:Key="Label" TargetType="TextBlock">
   <Setter Property="VerticalAlignment" Value="Center"/>
-  <Setter Property="Margin" Value="2,0,6,6"/>
+  <Setter Property="Margin" Value="2,0,8,8"/>
 </Style>
 <Style x:Key="Counter" TargetType="TextBlock">
   <Setter Property="VerticalAlignment" Value="Center"/>
-  <Setter Property="Margin" Value="8,0,6,6"/>
+  <Setter Property="Margin" Value="6,0,8,8"/>
   <Setter Property="Foreground" Value="{DynamicResource SubtleBrush}"/>
 </Style>
 '@

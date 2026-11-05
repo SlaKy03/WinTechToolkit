@@ -55,6 +55,10 @@ if (Test-Path -LiteralPath $settingsFile) {
 # Interface language: the one chosen in the title bar, otherwise the Windows one. Read by T
 # (Get-WTText) here and in the operations, which get it with the runspace variables.
 $global:WTLanguage = Get-WTLanguage $settings.Language
+# read once here and shared with the runspaces: they must not depend on the files later
+$global:WTStringTables = @{}
+$langFile = Join-Path $PSScriptRoot "Module\Lang\$global:WTLanguage.psd1"
+if ($global:WTLanguage -ne 'en' -and (Test-Path -LiteralPath $langFile)) { $global:WTStringTables[$global:WTLanguage] = Read-WTStringTable $langFile }
 $script:Languages = [ordered]@{ en = 'English'; it = 'Italiano' }
 
 $script:Pages = New-Object System.Collections.Generic.List[object]
@@ -167,7 +171,7 @@ $xaml = @"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display"
         Background="{DynamicResource BgBrush}" Foreground="{DynamicResource TextBrush}">
   <WindowChrome.WindowChrome>
-    <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    <WindowChrome CaptionHeight="52" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
   </WindowChrome.WindowChrome>
   <Window.Resources>
     $(Get-WTBrushXaml 'Dark')
@@ -177,7 +181,7 @@ $xaml = @"
   <Border x:Name="RootBorder" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1">
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="48"/>
+      <RowDefinition Height="52"/>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="*"/>
       <RowDefinition Height="28"/>
@@ -195,18 +199,19 @@ $xaml = @"
           <Button x:Name="BtnClose" Style="{StaticResource CloseButton}" Content="&#xE8BB;" ToolTip="$(TX 'Close')"/>
         </StackPanel>
         <Button x:Name="BtnNavToggle" DockPanel.Dock="Left" Style="{StaticResource CaptionButton}" Width="62" FontSize="15" Content="&#xE700;" ToolTip="$(TX 'Collapse / expand the menu')"/>
-        <Border x:Name="AppLogo" DockPanel.Dock="Left" Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
-          <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Border x:Name="AppLogo" DockPanel.Dock="Left" Width="30" Height="30" CornerRadius="8" Background="{DynamicResource AccentBrush}" Margin="0,0,12,0" VerticalAlignment="Center">
+          <TextBlock Text="&#xE90F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
-        <StackPanel x:Name="TitleArea" VerticalAlignment="Center" Margin="0,0,12,0">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock FontSize="14" FontWeight="Bold" Text="$(X $app.Name)" VerticalAlignment="Center"/>
-            <Border x:Name="TitleBadge" Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="5,0,5,1" Margin="8,1,0,0" VerticalAlignment="Center" Visibility="Collapsed">
-              <TextBlock x:Name="TxtTitleBadge" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+        <Grid x:Name="TitleArea" VerticalAlignment="Center" Margin="0,0,12,0">
+          <Grid.RowDefinitions><RowDefinition Height="18"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock FontSize="13.5" FontWeight="Bold" Text="$(X $app.Name)" VerticalAlignment="Center"/>
+            <Border x:Name="TitleBadge" Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Height="15" Padding="5,0" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+              <TextBlock x:Name="TxtTitleBadge" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
             </Border>
           </StackPanel>
-          <TextBlock x:Name="TxtHeaderInfo" FontSize="11" Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
-        </StackPanel>
+          <TextBlock x:Name="TxtHeaderInfo" Grid.Row="1" FontSize="11" Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+        </Grid>
       </DockPanel>
     </Border>
 
@@ -230,7 +235,7 @@ $xaml = @"
             <RadioButton x:Name="NavAbout" Style="{StaticResource NavButton}" GroupName="Links" Tag="&#xE946;" Content="$(TX 'About')" ToolTip="$(TX 'Version and project page')"/>
             <TextBlock x:Name="TxtVersion" FontSize="10.5" Foreground="{DynamicResource SubtleBrush}" Margin="22,4,0,0"/>
           </StackPanel>
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <ScrollViewer x:Name="NavScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,0,0,8">$($nav.ToString())</StackPanel>
           </ScrollViewer>
         </DockPanel>
@@ -411,6 +416,10 @@ $xaml = @"
                     <TextBox.Template><ControlTemplate TargetType="TextBox"><ScrollViewer x:Name="PART_ContentHost" Focusable="False"/></ControlTemplate></TextBox.Template>
                   </TextBox>
                 </ScrollViewer>
+                <CheckBox x:Name="ChkDlgOption" Margin="0,14,0,0" Visibility="Collapsed">
+                  <!-- the CheckBox template is a horizontal StackPanel: without a limit the text would not wrap -->
+                  <TextBlock x:Name="TxtDlgOption" TextWrapping="Wrap" MaxWidth="470"/>
+                </CheckBox>
               </StackPanel>
             </DockPanel>
           </DockPanel>
@@ -449,8 +458,11 @@ function Show-WTDialog {
     .SYNOPSIS
         Modal message in the window theme. Returns $true for Yes/OK.
         Waits in a nested dispatcher frame, like MessageBox: the timer keeps running.
+        -CheckText adds an option under the message (unchecked); its state is left in
+        $script:DialogChecked.
     #>
-    param([string]$Message, [string]$Title, [ValidateSet('Info', 'Warning')][string]$Kind = 'Info', [switch]$YesNo)
+    param([string]$Message, [string]$Title, [ValidateSet('Info', 'Warning')][string]$Kind = 'Info', [switch]$YesNo, [string]$CheckText)
+    $script:DialogChecked = $false
     $icon = if ($Kind -eq 'Warning') { 'WarnBrush' } else { 'AccentBrush' }
     $buttons = if ($YesNo) { 'YesNo' } else { 'OK' }
     $image = if ($Kind -eq 'Warning') { 'Warning' } else { 'Information' }
@@ -466,6 +478,9 @@ function Show-WTDialog {
     $ui.DlgIconBg.SetResourceReference([System.Windows.Shapes.Shape]::FillProperty, $icon)
     $ui.BtnDlgYes.Content = $(if ($YesNo) { T 'Yes' } else { 'OK' })
     $ui.BtnDlgNo.Visibility = $(if ($YesNo) { 'Visible' } else { 'Collapsed' })
+    $ui.TxtDlgOption.Text = $CheckText
+    $ui.ChkDlgOption.IsChecked = $false
+    $ui.ChkDlgOption.Visibility = $(if ($CheckText) { 'Visible' } else { 'Collapsed' })
 
     $focused = [System.Windows.Input.Keyboard]::FocusedElement
     $script:DialogResult = $false
@@ -483,6 +498,7 @@ function Show-WTDialog {
         if ($focused -is [System.Windows.UIElement] -and $focused.IsVisible) { [void]$focused.Focus() }
     }
     if (-not $pushed) { return ([System.Windows.MessageBox]::Show($window, $Message, $Title, $buttons, $image) -in 'Yes', 'OK') }
+    $script:DialogChecked = $script:DialogResult -and [bool]$ui.ChkDlgOption.IsChecked
     $script:DialogResult
 }
 
@@ -733,6 +749,8 @@ function Set-WTSidebar([bool]$Expanded) {
     $ui.NavData.Content = $(if ($Expanded) { T 'Logs and reports' } else { $null })
     $ui.NavAbout.Content = $(if ($Expanded) { T 'About' } else { $null })
     $ui.TxtVersion.Visibility = $(if ($Expanded) { 'Visible' } else { 'Collapsed' })
+    # collapsed: the scroll bar would push the icons off centre (the wheel still scrolls)
+    $ui.NavScroll.VerticalScrollBarVisibility = $(if ($Expanded) { 'Auto' } else { 'Hidden' })
     for ($i = 0; $ui.ContainsKey("NavHdr$i"); $i++) {
         $ui["NavHdr$i"].Visibility = $(if ($Expanded) { 'Visible' } else { 'Collapsed' })
         $ui["NavSep$i"].Visibility = $(if ($Expanded -or $i -eq 0) { 'Collapsed' } else { 'Visible' })
@@ -796,12 +814,31 @@ $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionSta
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTLogFile', $global:WTLogFile, '')))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTProcesses', $global:WTProcesses, '')))
 $iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTLanguage', $global:WTLanguage, '')))
+$iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTStringTables', $global:WTStringTables, '')))
+# The pool creates its runspaces only when needed, importing the module from disk at that
+# moment. If the files are gone by then (toolkit run from %TEMP% and the folder emptied by an
+# uninstaller or another cleanup tool) the wrapper below loads the same code from memory;
+# without it the new runspace had no functions ("Invoke-WTCleanup not recognized").
+$iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTModuleSource', (& (Get-Module WinTechToolkit) { $script:WTModuleCode }), '')))
+$iss.Variables.Add((New-Object System.Management.Automation.Runspaces.SessionStateVariableEntry('WTModuleDir', (Split-Path $modulePath -Parent), '')))
 $script:Pool = [runspacefactory]::CreateRunspacePool(1, 5, $iss, $Host)
 $script:Pool.ApartmentState = 'STA'
 $script:Pool.Open()
 
 $script:TaskWrapper = {
     param([string]$WTTaskId, [string]$WTScript, [hashtable]$WTParameters)
+    if (-not (Get-Command Get-WTDataFolder -ErrorAction SilentlyContinue)) {
+        # same steps as WinTechToolkit.psm1, with the code read at startup
+        New-Module -Name WinTechToolkit -ArgumentList $WTModuleSource, $WTModuleDir -ScriptBlock {
+            param($Code, $Dir)
+            $script:WTModuleRoot = $Dir
+            $PSDefaultParameterValues = @{ 'Test-Path:ErrorAction' = 'SilentlyContinue' }
+            . ([scriptblock]::Create($Code))
+            $script:WTModuleCode = $Code
+            $script:WTToolkitRoot = ConvertTo-WTLongPath (Split-Path $Dir -Parent)
+            Export-ModuleMember -Function '*-WT*' -Alias 'T'
+        } | Import-Module -DisableNameChecking
+    }
     $global:WTTaskId = $WTTaskId
     & ([scriptblock]::Create($WTScript)) @WTParameters
 }.ToString()
@@ -1085,7 +1122,8 @@ function Select-WTPageById([string]$Id) {
 # --- General handlers ------------------------------------------------------------
 On 'BtnMin' { $window.WindowState = 'Minimized' }
 On 'BtnMax' { $window.WindowState = $(if ($window.WindowState -eq 'Maximized') { 'Normal' } else { 'Maximized' }) }
-On 'BtnClose' { $window.Close() }
+# Close() while the window is already closing (the confirmation is open) throws an exception
+On 'BtnClose' { if (-not $script:Closing) { $window.Close() } }
 On 'BtnTheme' { Set-WTTheme $(if ($settings.Theme -eq 'Dark') { 'Light' } else { 'Dark' }) }
 On 'BtnLang' { Show-WTLanguageMenu }
 On 'BtnNavToggle' { Set-WTSidebar (-not [bool]$settings.SidebarExpanded) }
@@ -1186,9 +1224,17 @@ $window.Add_ContentRendered({
 
 $window.Add_Closing({
         param($s, $e)
+        $script:Closing = $true
+        # no question when the window closes to restart in another language
+        if (-not $script:RestartRequested -and -not $script:NoCloseConfirm) {
+            $msg = if ($script:CurrentJob) {
+                T "An operation is still running: {0}.`n`nStop it and close? The programs it started (e.g. SFC, DISM) are terminated." $script:CurrentJob.Title
+            } else { T 'Close {0}?' $app.Name }
+            $opt = T 'Also delete the toolkit data in {0}: logs, reports, registry backups (.reg) and settings' $dataDir
+            if (-not (Show-WTDialog -Message $msg -Title (T 'Close') -Kind Warning -YesNo -CheckText $opt)) { $e.Cancel = $true; $script:Closing = $false; return }
+            $script:DeleteDataOnExit = $script:DialogChecked
+        }
         if ($script:CurrentJob) {
-            $msg = T "An operation is still running: {0}.`n`nStop it and close? The programs it started (e.g. SFC, DISM) are terminated." $script:CurrentJob.Title
-            if (-not (Show-WTConfirm $msg 'Close')) { $e.Cancel = $true; return }
             $script:TaskQueue.Clear()
             Stop-WTCurrentTask -Force
         }
@@ -1259,5 +1305,16 @@ try {
     $script:Pool.Close()
     $script:Pool.Dispose()
 }
+# "delete the toolkit data" ticked when closing: nothing is left in ProgramData
+if ($script:DeleteDataOnExit -and -not (Test-WTToolkitPath $dataDir)) {
+    Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+    # files still locked while this process ends: one more attempt a few seconds later
+    if (Test-Path -LiteralPath $dataDir) {
+        Start-Process -FilePath "$env:windir\System32\cmd.exe" -ArgumentList "/c timeout /t 5 /nobreak >nul & rd /s /q `"$dataDir`"" -WindowStyle Hidden
+    }
+}
 # language changed: the toolkit starts again in the same process
-if ($script:RestartRequested) { & $scriptPath }
+if ($script:RestartRequested) {
+    if (Test-Path -LiteralPath $scriptPath) { & $scriptPath }
+    else { [System.Windows.MessageBox]::Show((T 'The toolkit files are no longer available: start it again to apply the language.'), $app.Name, 'OK', 'Warning') | Out-Null }
+}

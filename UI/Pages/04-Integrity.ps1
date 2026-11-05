@@ -21,7 +21,7 @@ $pageXaml = @"
         <WrapPanel Margin="0,4,0,0">
           <TextBlock Style="{StaticResource Label}" Text="$(TX 'Source (optional):')"/>
           <TextBox x:Name="TxtDismSource" Width="360" ToolTip="$(TX 'E.g. WIM:D:\sources\install.wim:1 or ESD:D:\sources\install.esd:1')"/>
-          <CheckBox x:Name="ChkLimitAccess" Style="{StaticResource Switch}" Content="$(TX '/LimitAccess (do not use Windows Update)')" Margin="4,0,0,6"/>
+          <CheckBox x:Name="ChkLimitAccess" Style="{StaticResource Switch}" Content="$(TX '/LimitAccess (do not use Windows Update)')"/>
         </WrapPanel>
         <TextBlock Style="{StaticResource Hint}" Text="$(TX 'With WSUS or without Internet access RestoreHealth fails (0x800F081F/0x800F0906): mount an ISO of the same build and enter WIM:D:\sources\install.wim:1 with /LimitAccess.')"/>
       </StackPanel>

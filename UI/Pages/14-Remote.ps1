@@ -45,7 +45,7 @@ $pageXaml = @"
         <StackPanel>
           <WrapPanel>
             <TextBox x:Name="TxtRemoteHost" Style="{StaticResource SearchBox}" Width="260" Tag="$(TX 'Computer name or address')"/>
-            <CheckBox x:Name="ChkRemoteCred" Style="{StaticResource Switch}" Content="$(TX 'Use a different account')" Margin="6,0,10,6"/>
+            <CheckBox x:Name="ChkRemoteCred" Style="{StaticResource Switch}" Content="$(TX 'Use a different account')"/>
             $(New-Pill -Name 'BtnRemoteTest' -Glyph '&#xE703;' -Text 'Test connection' -Primary)
             $(New-Pill -Name 'BtnRemoteRdp' -Glyph '&#xE7F4;' -Text 'Remote Desktop')
             $(New-Pill -Name 'BtnRemoteMgmt' -Glyph '&#xE713;' -Text 'Computer Management')

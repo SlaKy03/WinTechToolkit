@@ -58,7 +58,7 @@ SmartScreen e alcuni antivirus possono segnalarlo. Nel dubbio usa lo zip e leggi
 | Users | **User profiles** | Ultimo utilizzo reale e dimensione, profili TEMP e `.bak`, cartelle orfane, selezione dei profili inutilizzati, eliminazione completa, riparazione del profilo temporaneo |
 | | **Credentials and access** | Gestione credenziali dell'utente connesso, ticket Kerberos (utente e computer), membri di Administrators, Remote Desktop Users e Users |
 | | **Office and Teams** | Riparazione rapida/online e aggiornamento di Office, cache di Teams, accesso e licenza di Microsoft 365, file .ost, Outlook in modalità provvisoria, reset di OneDrive |
-| Software | **Programs and leftovers** | Disinstallazione silenziosa (MSI, Inno Setup, NSIS) e ricerca dei residui: cartelle, registro, servizi, attività, collegamenti |
+| Software | **Programmi e app** | Due schede: programmi desktop (disinstallazione silenziosa: MSI, Inno Setup, NSIS) e app di Microsoft Store (rimozione per tutti gli utenti e per i nuovi utenti); ricerca dei residui: cartelle, registro, servizi, attività, collegamenti, dati delle app |
 | | **Startup and tasks** | Programmi all'avvio di tutti gli utenti e attività pianificate, con disattivazione reversibile |
 | Network | **Network and domain** | Schede di rete, rilascio/rinnovo IP, DNS, test di connettività e di porta, reset Winsock, gpupdate, gpresult, trust del dominio, ora |
 | | **Printers** | Code e stato, pagina di prova, collegamento di stampanti condivise (per tutti o per un utente), rimozione di stampanti e driver inutilizzati, spooler |

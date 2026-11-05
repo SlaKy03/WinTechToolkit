@@ -1,7 +1,56 @@
 ﻿# Printers: list, network connections, queues, unused drivers.
 
+function Import-WTPrintModule {
+    <#
+    .SYNOPSIS
+        Loads PrintManagement; $false if it cannot be loaded.
+    .NOTES
+        In the GUI runspaces the automatic loading sometimes fails ("Get-Printer found in the
+        module PrintManagement, but the module could not be loaded"), e.g. while an antivirus
+        scans the module or other runspaces load modules at the same time: a few more tries.
+    #>
+    if (Get-Module PrintManagement) { return $true }
+    for ($i = 1; $i -le 3; $i++) {
+        try { Import-Module PrintManagement -ErrorAction Stop -WarningAction SilentlyContinue; return $true }
+        catch { Start-Sleep -Milliseconds (300 * $i) }
+    }
+    $false
+}
+
+function Get-WTPrinterFromCim {
+    # Same objects as Get-WTPrinter, read from Win32_Printer when PrintManagement does not load
+    $jobs = @(Get-CimInstance Win32_PrintJob -ErrorAction SilentlyContinue)
+    foreach ($p in Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue | Sort-Object Name) {
+        # PrinterStatus: 4 printing, 7 offline (1 = "other" is common on network queues and is
+        # not an error). DetectedErrorState: 4 no paper, 6 no toner, 7 door open, 8 jammed,
+        # 9 offline, 10 service requested
+        $e = [int]$p.DetectedErrorState
+        $key = if ($p.WorkOffline -or $p.PrinterStatus -eq 7 -or $e -eq 9) { 'Offline' }
+        elseif ($e -eq 4) { 'PaperOut' }
+        elseif ($e -eq 8) { 'PaperJam' }
+        elseif ($e -in 6, 7, 10) { 'Error' }
+        elseif ($p.PrinterStatus -eq 4) { 'Printing' }
+        else { 'Normal' }
+        $st = @{ Normal = 'Ready'; Offline = 'Offline'; Error = 'Error'; Printing = 'Printing'; PaperOut = 'Out of paper'; PaperJam = 'Paper jam' }[$key]
+        [pscustomobject]@{
+            Name       = $p.Name
+            Type       = $(if ($p.Network) { T 'Network connection' } else { T 'Local' })
+            Driver     = $p.DriverName
+            Port       = $p.PortName
+            Shared     = Format-WTBool $p.Shared
+            Status     = $st
+            StatusText = (T $st)
+            Jobs       = @($jobs | Where-Object { "$($_.Name)".StartsWith("$($p.Name),") }).Count
+        }
+    }
+}
+
 function Get-WTPrinter {
     # Status: Ready, Offline, Error... (row colours), StatusText: shown in the table
+    if (-not (Import-WTPrintModule)) {
+        Write-WTLog 'The PrintManagement module could not be loaded: printers read from WMI.'
+        return Get-WTPrinterFromCim
+    }
     $status = @{ Normal = 'Ready'; Offline = 'Offline'; Error = 'Error'; PaperOut = 'Out of paper'; PaperJam = 'Paper jam'; Paused = 'Paused'; Busy = 'Busy'; Printing = 'Printing' }
     $statusText = @{
         Normal = (T 'Ready'); Offline = (T 'Offline'); Error = (T 'Error'); PaperOut = (T 'Out of paper'); PaperJam = (T 'Paper jam')
@@ -62,6 +111,7 @@ function Add-WTNetworkPrinter {
 
 function Remove-WTPrinter {
     param([Parameter(Mandatory)][string[]]$Name, [switch]$Simulate)
+    if (-not (Import-WTPrintModule)) { Write-WTLog 'The PrintManagement module could not be loaded: try again.' -Level Error; return }
     foreach ($n in $Name) {
         if ($Simulate) { Write-WTLog (T '[SIMULATION] Would remove printer {0}' $n); continue }
         if ($n -like '\\*') {
@@ -80,6 +130,7 @@ function Remove-WTPrinter {
 
 function Clear-WTPrintQueue {
     param([Parameter(Mandatory)][string[]]$Name)
+    if (-not (Import-WTPrintModule)) { Write-WTLog 'The PrintManagement module could not be loaded: try again.' -Level Error; return }
     foreach ($n in $Name) {
         $jobs = @(Get-PrintJob -PrinterName $n -ErrorAction SilentlyContinue)
         $jobs | Remove-PrintJob -ErrorAction SilentlyContinue
@@ -100,7 +151,10 @@ function Invoke-WTPrinterTestPage {
 function Remove-WTUnusedPrinterDriver {
     # Printer drivers not used by any printer (system Microsoft drivers excluded)
     param([switch]$Simulate)
-    $used = @(Get-Printer -ErrorAction SilentlyContinue | ForEach-Object { $_.DriverName })
+    # without the printer list every driver would look unused
+    if (-not (Import-WTPrintModule)) { Write-WTLog 'The PrintManagement module could not be loaded: try again.' -Level Error; return }
+    try { $used = @(Get-Printer -ErrorAction Stop | ForEach-Object { $_.DriverName }) }
+    catch { Write-WTLog (T 'Could not read the printers: {0}' $_.Exception.Message.Trim()) -Level Error; return }
     $drivers = @(Get-PrinterDriver -ErrorAction SilentlyContinue | Where-Object {
             $used -notcontains $_.Name -and $_.Manufacturer -ne 'Microsoft' -and $_.Name -notmatch '^Microsoft|Remote Desktop Easy Print'
         })

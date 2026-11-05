@@ -18,6 +18,31 @@
   (129 checks, also run on GitHub), which also covers the protected names and paths, the
   profile protections, the leftovers search and the language fallback.
 - Programs and startup items: trailing spaces in the publisher and version are removed.
+- Fix: after an uninstall or a cleanup of the temp folders, the next operations failed with
+  "Invoke-WTCleanup / Find-WTProgramResidue / Get-WTPrinter is not recognized". When the
+  toolkit runs from %TEMP% (exe or `irm | iex`) its own files could be deleted, and the
+  background runspaces created later could no longer load the module. The runspaces now load
+  it from the code read at startup, and the cleanups never delete the folder of the running
+  toolkit or of another running copy (also with 8.3 short paths like `C:\Users\ABCDEF~1`).
+- New tools: problem devices with the meaning of the error code and BitLocker recovery key
+  (System), Windows Hello PIN reset (Accounts), Wi-Fi report (Network).
+- **Programs and apps** (was "Programs and leftovers"): two tabs, desktop programs and
+  **Microsoft Store apps**. Store apps are listed for every user with their name as shown in
+  Start, size and source; they are removed for all users and, optionally, also for new users
+  (removed from the Windows image), then their leftover data folders are searched. Apps that
+  Windows or other apps need (Store, App Installer/winget, Windows Security, Edge, runtimes)
+  are shown in grey and never removed.
+- Printers: when Windows cannot load the PrintManagement module in the background ("Get-Printer
+  found in the module PrintManagement, but the module could not be loaded") the module is loaded
+  again a few times and the list is read from WMI as a last resort. Removing printers, queues
+  and unused drivers stops with an error instead: without the printer list every driver would
+  have looked unused.
+- Closing the toolkit asks for a confirmation, with an option to delete its data in
+  `C:\ProgramData\WinTechToolkit` (logs, reports, registry backups, settings).
+- Interface: buttons, search boxes, switches, filters and counters have the same height and
+  spacing on every page; the title bar is taller and aligned; the collapsed menu no longer
+  shows a scroll bar that pushed the icons off centre; "Windows Hello" in Credentials and
+  access is on its own line instead of next to the button.
 
 ## 0.9.2-beta
 

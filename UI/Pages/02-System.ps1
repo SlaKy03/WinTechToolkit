@@ -59,6 +59,8 @@ $pageXaml = @"
       <WrapPanel>
         $(New-Tile -Name 'BtnRestorePoint' -Glyph '&#xE777;' -Title 'Create restore point' -Desc 'Bypasses the one-per-24-hours limit')
         $(New-Tile -Name 'BtnBattery' -Glyph '&#xE83F;' -Title 'Battery report' -Desc 'powercfg /batteryreport (laptops)')
+        $(New-Tile -Name 'BtnProblemDevices' -Glyph '&#xE7BA;' -Title 'Devices with problems' -Desc 'Device Manager errors with the meaning of the code')
+        $(New-Tile -Name 'BtnBitLockerKey' -Glyph '&#xE72E;' -Title 'BitLocker recovery key' -Desc 'Shown on screen, not saved in the log')
       </WrapPanel>
       <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Windows consoles')" Margin="0,8,0,10"/>
       <WrapPanel>$consoleXaml</WrapPanel>
@@ -80,6 +82,16 @@ Register-WTPage -Id 'System' -Group 'Diagnostics' -Title 'System' -Glyph '&#xE7F
     On 'BtnReport' { Invoke-WTReportAction }
     On 'BtnRestorePoint' { Start-WTTask 'Restore point' { New-WTRestorePoint | Out-Null } }
     On 'BtnBattery' { Start-WTTask 'Battery report' { New-WTBatteryReport } -OnComplete { param($r) Open-WTFile $r } }
+    On 'BtnProblemDevices' { Start-WTTask 'Devices with problems' { Get-WTProblemDevice | Out-Null } }
+    On 'BtnBitLockerKey' {
+        Start-WTTask 'BitLocker recovery key' { Get-WTBitLockerRecoveryKey } -OnComplete {
+            param($r)
+            $keys = @($r | Where-Object { $_ -and $_.PSObject.Properties['Key'] })
+            if (-not $keys.Count) { return }
+            $text = ($keys | ForEach-Object { T "Drive {0}`nKey ID: {1}`nRecovery key: {2}" $_.Drive $_.Id $_.Key }) -join "`n`n"
+            Show-WTInfo $text
+        }
+    }
     for ($i = 0; $i -lt $script:Consoles.Count; $i++) {
         On "Con$i" { param($s) try { Start-Process ([string]$s.Tag) } catch { Write-WTLog (T 'Could not open {0}: {1}' $s.Tag $_.Exception.Message) -Level Error } }
     }

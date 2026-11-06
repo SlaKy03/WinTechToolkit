@@ -1,10 +1,13 @@
 # build output
 dist/
 
-# local files, not part of the project
-.claude/
-.vscode/
+# local folders of editors and tools (the repository only uses .github)
+/.*/
+!/.github/
+
+# notes and transcripts stay local: only the documentation below is published
+*.md
+!/README.md
+!/README.it.md
+!/CHANGELOG.md
 *.md.bak
-*Claude Agent*.md
-Riprendere sviluppo*.md
-da rivedere.md

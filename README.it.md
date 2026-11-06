@@ -123,13 +123,12 @@ Elenco completo: `Get-Command -Module WinTechToolkit`.
 ## Limiti noti
 
 - Gli HKCU degli utenti non connessi non vengono analizzati per i residui.
-- Le app dello Store (Appx/MSIX) non compaiono nell'elenco dei programmi.
 - Gli uninstaller EXE senza switch silenzioso riconosciuto si avviano in modalità interattiva.
 - `gpupdate` applica i criteri utente all'account che esegue il toolkit.
 - L'exe non è firmato (vedi "Sulla fiducia").
 - Il report per il ticket è solo in inglese.
 
-Per struttura del progetto, build e pubblicazione delle release vedi il [README in inglese](README.md).
+Per la struttura del progetto vedi il [README in inglese](README.md).
 
 ## Licenza
 

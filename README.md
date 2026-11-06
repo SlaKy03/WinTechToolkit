@@ -150,21 +150,9 @@ which must have **no** BOM because it is run with `irm | iex`.
 `Build\Test-Safety.ps1` checks that profiles, system paths and personal folders can never be
 deleted; it never deletes anything real outside folders it creates in `%LOCALAPPDATA%`.
 
-## Publishing a release
-
-1. Update `Version` in `app.json` and `CHANGELOG.md`.
-2. `git tag v0.9.3-beta && git push --tags`: GitHub Actions runs the checks, builds, and
-   publishes the release with `WinTechToolkit.zip`, `WinTechToolkit.exe` and their `.sha256` files.
-
-Do **not** mark the release as a GitHub "pre-release": `releases/latest`, which the
-launcher and `start.ps1` use, ignores pre-releases.
-
-Manual build: `powershell -ExecutionPolicy Bypass -File .\Build\Build.ps1`.
-
 ## Known limitations
 
 - The HKCU hives of users who are not signed in are not scanned for leftovers.
-- Store apps (Appx/MSIX) do not appear in the program list.
 - EXE uninstallers without a recognized silent switch start in interactive mode.
 - `gpupdate` applies user policies to the account running the toolkit.
 - The exe is not code-signed (see "About trust").

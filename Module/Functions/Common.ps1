@@ -327,6 +327,62 @@ function Test-WTProtectedPath {
     $false
 }
 
+function Test-WTFolderDeletable {
+    <#
+    .SYNOPSIS
+        $false for the folders no delete function may touch: system paths, the running toolkit,
+        the personal folders of a profile (Documents, Desktop, AppData...), the profile folders
+        (allowed only with -AllowProfileRoot) and the profiles Windows uses for itself.
+    #>
+    param([Parameter(Mandatory)][string]$Path, [switch]$AllowProfileRoot)
+    $p = $Path.TrimEnd('\')
+    if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p -or (Test-WTToolkitPath $p)) { return $false }
+    $profileFolders = @(Get-WTProfileFolders)
+    foreach ($pr in $profileFolders) {
+        foreach ($sub in '\AppData', '\AppData\Roaming', '\AppData\Local', '\AppData\LocalLow', '\AppData\Local\Programs', '\Desktop', '\Documents', '\Downloads', '\Pictures', '\Music', '\Videos', '\OneDrive') {
+            if ($p -eq ($pr + $sub)) { return $false }
+        }
+    }
+    # profiles Windows uses for itself (defaultuser0...) are refused even for the profile functions
+    if ((Split-Path $p -Parent) -eq (Get-WTProfilesDirectory) -and (Test-WTSystemProfileName (Split-Path $p -Leaf))) { return $false }
+    if (($profileFolders -contains $p) -and -not $AllowProfileRoot) { return $false }
+    $true
+}
+
+function Register-WTDeleteAtReboot {
+    <#
+    .SYNOPSIS
+        Schedules a folder whose files are in use for deletion at the next restart (MoveFileEx
+        with MOVEFILE_DELAY_UNTIL_REBOOT). Same protections as Remove-WTFolder, profile folders
+        never. $true if every item was scheduled.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    $p = $Path.TrimEnd('\')
+    if (-not (Test-WTFolderDeletable -Path $p)) { Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error; return $false }
+    if (-not (Test-Path -LiteralPath $p)) { return $true }
+    if (-not ('WTNative.MoveFile' -as [type])) {
+        Add-Type -Namespace WTNative -Name MoveFile -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool MoveFileEx(string existing, string target, int flags);'
+    }
+    # contents first (deepest last in the list, deleted first), then the folder;
+    # junctions are scheduled as links, their target is not followed
+    $items = New-Object Collections.Generic.List[IO.FileSystemInfo]
+    $todo = New-Object Collections.Generic.Stack[IO.DirectoryInfo]
+    $todo.Push((New-Object IO.DirectoryInfo $p))
+    $ok = $true
+    while ($todo.Count) {
+        $d = $todo.Pop()
+        $items.Add($d)
+        if ($d.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+        try { $children = $d.GetFileSystemInfos() } catch { $ok = $false; continue }
+        foreach ($c in $children) { if ($c -is [IO.DirectoryInfo]) { $todo.Push($c) } else { $items.Add($c) } }
+    }
+    for ($i = $items.Count - 1; $i -ge 0; $i--) {
+        if (-not [WTNative.MoveFile]::MoveFileEx("\\?\$($items[$i].FullName)", $null, 4)) { $ok = $false }
+    }
+    if ($ok) { Write-WTLog (T 'Files in use: {0} will be deleted at the next restart.' $p) -Level Warn }
+    $ok
+}
+
 function Remove-WTFolder {
     <#
     .SYNOPSIS
@@ -340,19 +396,7 @@ function Remove-WTFolder {
     #>
     param([Parameter(Mandatory)][string]$Path, [switch]$Simulate, [switch]$AllowProfileRoot)
     $p = $Path.TrimEnd('\')
-    if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p -or (Test-WTToolkitPath $p)) {
-        Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
-        return $false
-    }
-    $profileFolders = @(Get-WTProfileFolders)
-    $isProfileRoot = $profileFolders -contains $p
-    $isPersonal = $false
-    foreach ($pr in $profileFolders) {
-        foreach ($sub in '\AppData', '\AppData\Roaming', '\AppData\Local', '\AppData\LocalLow', '\AppData\Local\Programs', '\Desktop', '\Documents', '\Downloads', '\Pictures', '\Music', '\Videos', '\OneDrive') {
-            if ($p -eq ($pr + $sub)) { $isPersonal = $true }
-        }
-    }
-    if ($isPersonal -or ($isProfileRoot -and -not $AllowProfileRoot)) {
+    if (-not (Test-WTFolderDeletable -Path $p -AllowProfileRoot:$AllowProfileRoot)) {
         Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
         return $false
     }
@@ -492,6 +536,7 @@ function Get-WTUserTargets {
         if (-not (Test-Path -LiteralPath $ip)) { continue }
         $name = Resolve-WTSidName $sid
         if (-not $name) { $name = Split-Path $ip -Leaf }
+        if ((Test-WTSystemProfileName $name) -or (Test-WTSystemProfileName (Split-Path $ip -Leaf))) { continue }
         $list.Add([pscustomobject]@{ UserName = $name; SID = $sid; ProfilePath = $ip; LoggedOn = $false })
     }
     $list.ToArray()

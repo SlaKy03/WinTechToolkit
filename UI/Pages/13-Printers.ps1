@@ -12,9 +12,14 @@ function Update-WTPrinters {
 }
 
 function Get-WTSelectedPrinterNames {
-    $names = @($ui.GridPrinters.SelectedItems | ForEach-Object { $_.Name })
-    if (-not $names.Count) { Show-WTInfo 'Select one or more printers.' }
-    $names
+    # test page and queue work on the printers of this account, not on the connections of other users
+    $sel = @($ui.GridPrinters.SelectedItems)
+    if (-not $sel.Count) { Show-WTInfo 'Select one or more printers.'; return @() }
+    $other = @($sel | Where-Object { $_.Status -eq 'UserSession' })
+    if ($other.Count) {
+        Show-WTInfo (T "{0} is a network printer of {1}: its queue and test page are only available in their session." $other[0].Name $other[0].UserText)
+    }
+    @($sel | Where-Object { $_.Status -ne 'UserSession' } | ForEach-Object { $_.Name })
 }
 
 $pageXaml = @"
@@ -43,6 +48,9 @@ $pageXaml = @"
         <Style.Triggers>
           <DataTrigger Binding="{Binding Status, Mode=OneWay}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource ErrBrush}"/></DataTrigger>
           <DataTrigger Binding="{Binding Status, Mode=OneWay}" Value="Offline"><Setter Property="Foreground" Value="{DynamicResource WarnBrush}"/></DataTrigger>
+          <DataTrigger Binding="{Binding Status, Mode=OneWay}" Value="UserSession">
+            <Setter Property="ToolTip" Value="$(TX "Network printer of a signed-in user: status, driver and queue are only visible in their session")"/>
+          </DataTrigger>
         </Style.Triggers>
       </Style>
     </DataGrid.RowStyle>
@@ -58,6 +66,7 @@ $pageXaml = @"
       <DataGridTextColumn Header="$(TX 'Status')" Binding="{Binding StatusText, Mode=OneWay}" SortMemberPath="Status" Width="100"/>
       <DataGridTextColumn Header="$(TX 'Queued')" Binding="{Binding Jobs, Mode=OneWay}" Width="65"/>
       <DataGridTextColumn Header="$(TX 'Type')" Binding="{Binding Type, Mode=OneWay}" Width="140"/>
+      <DataGridTextColumn Header="$(TX 'User')" Binding="{Binding UserText, Mode=OneWay}" Width="150"/>
       <DataGridTextColumn Header="Driver" Binding="{Binding Driver, Mode=OneWay}" Width="2*"/>
       <DataGridTextColumn Header="$(TX 'Port')" Binding="{Binding Port, Mode=OneWay}" Width="*"/>
       <DataGridTextColumn Header="$(TX 'Shared')" Binding="{Binding Shared, Mode=OneWay}" Width="75"/>
@@ -93,11 +102,16 @@ Register-WTPage -Id 'Printers' -Group 'Network' -Title 'Printers' -Glyph '&#xE74
         if ($n.Count) { Start-WTTask 'Clear print queue' { param($Names) Clear-WTPrintQueue -Name $Names } -Parameters @{ Names = $n } -OnComplete { Update-WTPrinters } }
     }
     On 'BtnPrinterRemove' {
-        $n = Get-WTSelectedPrinterNames
-        if (-not $n.Count) { return }
-        if (-not (Show-WTConfirm ((T "Remove the selected printers?`n`n") + (($n | ForEach-Object { "• $_" }) -join "`n")))) { return }
-        Start-WTTask 'Removing printers' { param($Names, $Simulate) Remove-WTPrinter -Name $Names -Simulate:$Simulate } `
-            -Parameters @{ Names = $n; Simulate = Get-WTSimulate } -OnComplete { Update-WTPrinters }
+        $sel = @($ui.GridPrinters.SelectedItems)
+        if (-not $sel.Count) { Show-WTInfo 'Select one or more printers.'; return }
+        $list = ($sel | ForEach-Object { if ($_.UserName) { "• $($_.Name) ($($_.UserText))" } else { "• $($_.Name)" } }) -join "`n"
+        if (-not (Show-WTConfirm ((T "Remove the selected printers?`n`n") + $list))) { return }
+        # grouped by owner: the connections of a user are removed in their session
+        $groups = @($sel | Group-Object UserName | ForEach-Object { @{ User = $_.Name; Names = @($_.Group | ForEach-Object { $_.Name }) } })
+        Start-WTTask 'Removing printers' {
+            param($Groups, $Simulate)
+            foreach ($g in $Groups) { Remove-WTPrinter -Name $g.Names -UserName $g.User -Simulate:$Simulate }
+        } -Parameters @{ Groups = $groups; Simulate = Get-WTSimulate } -OnComplete { Update-WTPrinters }
     }
     On 'BtnSpooler' {
         Start-WTTask 'Spooler reset' { param($Simulate) Reset-WTPrintSpooler -Simulate:$Simulate } -Parameters @{ Simulate = Get-WTSimulate } -OnComplete { Update-WTPrinters }

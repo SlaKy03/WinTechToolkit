@@ -64,6 +64,8 @@ $report = & $mod {
         # that contains the running toolkit (e.g. run from the Desktop or from %TEMP%)
         if (Test-WTToolkitPath $pr) {
             C "Remove-WTFolder refuses the profile folder $leaf that contains the toolkit" (-not (Remove-WTFolder -Path $pr -Simulate -AllowProfileRoot 6>$null 3>$null))
+        } elseif (Test-WTSystemProfileName $leaf) {
+            C "Remove-WTFolder refuses the Windows profile $leaf even with -AllowProfileRoot" (-not (Remove-WTFolder -Path $pr -Simulate -AllowProfileRoot 6>$null 3>$null))
         } else {
             C "Remove-WTFolder accepts the profile folder $leaf with -AllowProfileRoot (Simulate)" ([bool](Remove-WTFolder -Path $pr -Simulate -AllowProfileRoot 6>$null 3>$null))
         }
@@ -135,6 +137,38 @@ $report = & $mod {
         Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    # --- 6b. Profiles Windows uses for itself (defaultuser0...) -------------------------------------
+    foreach ($n in 'defaultuser0', 'defaultuser100000', 'PC01\defaultuser0', 'WsiAccount') { C "system profile name: $n" (Test-WTSystemProfileName $n) }
+    foreach ($n in 'mario.rossi', 'defaultuser', 'defaultuserX', 'Administrator') { C "normal profile name: $n" (-not (Test-WTSystemProfileName $n)) }
+    C 'defaultuser profiles are not listed' (@(Get-WTUserProfile | Where-Object { Test-WTSystemProfileName (Split-Path "$($_.Path)" -Leaf) }).Count -eq 0)
+    C 'defaultuser profiles are not offered as targets' (@(Get-WTUserTargets | Where-Object { Test-WTSystemProfileName $_.UserName }).Count -eq 0)
+    $du = Join-Path (Get-WTProfilesDirectory) 'defaultuser0'
+    C 'Remove-WTFolder refuses C:\Users\defaultuser0 even with -AllowProfileRoot' (-not (Remove-WTFolder -Path $du -Simulate -AllowProfileRoot 6>$null 3>$null 4>$null))
+    $fakeDu = [pscustomobject]@{ Type = 'Profile'; TypeText = 'Profile'; UserName = 'PC01\defaultuser0'; SID = 'S-1-5-21-1-2-3-1001'; KeyName = 'S-1-5-21-1-2-3-1001'
+        Path = $du; Protected = $false; ProtectReason = ''; Loaded = $false }
+    $global:WTQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+    Remove-WTUserProfile -InputObject $fakeDu -Simulate 6>$null 3>$null 4>$null | Out-Null
+    $logLines = @($global:WTQueue.ToArray())
+    $global:WTQueue = $null
+    C 'Remove-WTUserProfile skips defaultuser0 even if asked' ([bool]($logLines -match 'account used by Windows') -and -not ($logLines -match 'SIMULATION'))
+
+    # --- 6c. Automatic cleanup after an uninstall ----------------------------------------------------
+    # an uninstall that did not complete never deletes the files of the program that is still there
+    $keep = Join-Path $env:LOCALAPPDATA 'WTSafetyRemovalProbe'
+    New-Item -ItemType Directory -Path $keep -Force | Out-Null
+    try {
+        $prog = [pscustomobject]@{ DisplayName = 'WTSafetyRemovalProbe'; Publisher = ''; Version = '1'; InstallLocation = $keep; UninstallString = ''
+            QuietUninstallString = ''; ProductCode = $null; RegistryKey = ''; InstallerType = 'EXE' }
+        $r = @(Invoke-WTProgramRemoval -Program $prog 6>$null 3>$null 4>$null)
+        C 'failed uninstall: the program folder is not deleted' (Test-Path -LiteralPath $keep)
+        C 'failed uninstall: the leftovers are returned for review' (@($r | Where-Object { $_.PSObject.Properties['Reason'] -and $_.Path -eq $keep }).Count -eq 1)
+    } finally { Remove-Item -LiteralPath $keep -Recurse -Force -ErrorAction SilentlyContinue }
+    # deletion at the next restart has the same protections as Remove-WTFolder
+    foreach ($path in @($env:windir, $env:ProgramFiles, [Environment]::GetFolderPath('MyDocuments'), $script:WTToolkitRoot, (Join-Path (Get-WTProfilesDirectory) 'defaultuser0'))) {
+        if ($path) { C "Register-WTDeleteAtReboot refuses: $path" (-not (Register-WTDeleteAtReboot -Path $path 6>$null 3>$null 4>$null)) }
+    }
+    foreach ($pr in $profiles) { C "Register-WTDeleteAtReboot refuses the profile folder $(Split-Path $pr -Leaf)" (-not (Register-WTDeleteAtReboot -Path $pr 6>$null 3>$null 4>$null)) }
+
     # --- 7a. Store apps: the ones Windows needs are never removed --------------------------------
     foreach ($n in 'Microsoft.WindowsStore', 'Microsoft.DesktopAppInstaller', 'Microsoft.SecHealthUI', 'Microsoft.MicrosoftEdge.Stable',
         'Microsoft.VCLibs.140.00', 'Microsoft.UI.Xaml.2.8', 'Microsoft.WindowsAppRuntime.1.5', 'Microsoft.LanguageExperiencePackit-IT') {
@@ -146,6 +180,12 @@ $report = & $mod {
         Provisioned = $false; ProvisionedName = $null; PackageFullName = 'Microsoft.WindowsStore_0.0.0.0_x64__8wekyb3d8bbwe'; PackageFamilyName = 'Microsoft.WindowsStore_8wekyb3d8bbwe' }
     $res = @(Remove-WTStoreApp -InputObject $fakeStore 6>$null 3>$null 4>$null)
     C 'Remove-WTStoreApp refuses Microsoft Store even if not marked as protected' ($res.Count -eq 0)
+    # an app that does not exist has no leftovers (no key of other apps or of Windows is proposed)
+    $ghost = [pscustomobject]@{ DisplayName = 'Ghost'; Name = 'Contoso.WTGhostApp'; PackageFamilyName = 'Contoso.WTGhostApp_abcdefghjkmnp' }
+    C 'Store leftovers: nothing for an app that does not exist' (@(Find-WTStoreAppResidue -App $ghost -Preview 6>$null 3>$null 4>$null).Count -eq 0)
+    $calc = [pscustomobject]@{ DisplayName = 'Calculator'; Name = 'Microsoft.WindowsCalculator'; PackageFamilyName = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe' }
+    $calcKeys = @(Find-WTStoreAppResidue -App $calc -Preview 6>$null 3>$null 4>$null | Where-Object { $_.Type -eq 'Registry' })
+    C 'Store leftovers: registry keys only of that app, never Deprovisioned' (@($calcKeys | Where-Object { $_.Path -match 'Deprovisioned' -or $_.Path -notmatch 'WindowsCalculator|\\AppX[a-z0-9]+$' }).Count -eq 0)
     # leftovers are only proposed for a well-formed family name, never for a generic path
     foreach ($pfn in '', '..', 'Packages', '..\..\Desktop', 'Microsoft.WindowsCalculator') {
         $r = @(Find-WTStoreAppResidue -App ([pscustomobject]@{ DisplayName = 'x'; PackageFamilyName = $pfn }) 6>$null 3>$null 4>$null)

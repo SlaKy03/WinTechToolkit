@@ -13,6 +13,7 @@ function Set-WTProgramsTab {
     $ui.GridPrograms.Visibility = $ui.ProgToolbar.Visibility
     $ui.StoreToolbar.Visibility = $(if ($store) { 'Visible' } else { 'Collapsed' })
     $ui.GridStore.Visibility = $ui.StoreToolbar.Visibility
+    # loaded at startup with the programs; here only if that has not happened yet
     if ($store -and -not $script:StoreAppsLoaded) { Update-WTStoreApps }
 }
 
@@ -47,6 +48,15 @@ function Update-WTProgramFilter {
         $ui.GridPrograms.ItemsSource = $script:AllPrograms
     }
     $ui.TxtProgCount.Text = T '{0} of {1} programs' (@($ui.GridPrograms.ItemsSource).Count) $script:AllPrograms.Count
+    # a name that matches no installed program: its leftovers are searched (program removed without the toolkit)
+    if ($script:AllPrograms.Count -and -not @($ui.GridPrograms.ItemsSource).Count -and (Get-WTOrphanSearchName)) { Request-WTResidueRefresh }
+}
+
+function Get-WTOrphanSearchName {
+    # text of the search box when it matches no installed program (at least 4 characters)
+    $f = $ui.TxtProgFilter.Text.Trim()
+    if ($f.Length -lt 4 -or (Test-WTStoreTab) -or @($ui.GridPrograms.ItemsSource).Count) { return $null }
+    $f
 }
 
 function Update-WTPrograms {
@@ -57,12 +67,79 @@ function Update-WTPrograms {
     }
 }
 
-function Show-WTResidues($Items) {
+function Show-WTResidues($Items, [switch]$Preview, [string]$Orphan) {
+    # -Preview: what is deleted together with the selected program (nothing pre-selected)
+    # -Orphan: leftovers of a program that is no longer installed, to select and delete
     $items = @($Items | Where-Object { $_ -and $_.PSObject.Properties['Reason'] })
     $ui.GridResidues.ItemsSource = $items
-    if ($items.Count) { $ui.GridResidues.SelectAll() }
+    if ($items.Count -and -not $Preview -and -not $Orphan) { $ui.GridResidues.SelectAll() }
     $sum = ($items | Measure-Object SizeBytes -Sum).Sum
-    $ui.TxtResCount.Text = T '{0} leftovers · {1}' $items.Count (Format-WTSize $sum)
+    $ui.TxtResCount.Text = if ($Orphan) {
+        if ($items.Count) { T "'{0}' is not installed: {1} leftovers · {2}, select them and delete" $Orphan $items.Count (Format-WTSize $sum) }
+        else { T "'{0}' is not installed and no leftovers were found." $Orphan }
+    } elseif ($Preview) { T '{0} items · {1} - deleted automatically after the uninstall' $items.Count (Format-WTSize $sum) }
+    else { T '{0} leftovers · {1}' $items.Count (Format-WTSize $sum) }
+}
+
+# Leftovers of the selected programs/apps, shown right away (short delay while the selection changes)
+$script:ResidueToken = 0
+$script:ResidueTimer = New-Object System.Windows.Threading.DispatcherTimer
+$script:ResidueTimer.Interval = [TimeSpan]::FromMilliseconds(450)
+$script:ResidueTimer.Add_Tick({
+        $script:ResidueTimer.Stop()
+        $store = Test-WTStoreTab
+        $sel = @($(if ($store) { $ui.GridStore.SelectedItems } else { $ui.GridPrograms.SelectedItems }) | Select-Object -First 10)
+        $orphan = Get-WTOrphanSearchName
+        # nothing selected (also when the list reloads after an uninstall): the table keeps the result
+        if (-not $sel.Count -and -not $orphan) { return }
+        if ($orphan) {
+            # program removed without the toolkit: folders and keys whose name contains the text
+            $sel = @([pscustomobject]@{ DisplayName = $orphan; Publisher = ''; Version = ''; InstallLocation = ''; UninstallString = ''
+                    QuietUninstallString = ''; ProductCode = $null; RegistryKey = ''; InstallerType = '' })
+        }
+        $script:ResidueToken++
+        $ui.TxtResCount.Text = T 'Searching for leftovers...'
+        Start-WTTask 'Leftovers of the selection' {
+            param($Items, $Store, $Token, $Orphan)
+            [pscustomobject]@{ WTResidueToken = $Token }
+            foreach ($i in $Items) {
+                if ($Store) { Find-WTStoreAppResidue -App $i -Preview }
+                elseif ($Orphan) { Find-WTProgramResidue -Program $i -Partial -Quiet }
+                else { Find-WTProgramResidue -Program $i -Quiet }
+            }
+        } -Parameters @{ Items = $sel; Store = $store; Token = $script:ResidueToken; Orphan = [bool]$orphan } -Background -OnComplete {
+            param($r)
+            # a newer selection already started its own search
+            $tok = @($r | Where-Object { $_ -and $_.PSObject.Properties['WTResidueToken'] } | Select-Object -First 1)
+            if (-not $tok.Count -or $tok[0].WTResidueToken -ne $script:ResidueToken) { return }
+            $name = Get-WTOrphanSearchName
+            if ($name) { Show-WTResidues $r -Orphan $name } else { Show-WTResidues $r -Preview }
+        }
+    })
+
+function Request-WTResidueRefresh { $script:ResidueTimer.Stop(); $script:ResidueTimer.Start() }
+
+function Clear-WTResiduePreview {
+    # other tab: the leftovers of the other list no longer apply (a search still running is ignored)
+    $script:ResidueToken++
+    $ui.GridResidues.ItemsSource = @()
+    $ui.TxtResCount.Text = ''
+}
+
+function Show-WTRemovalResult($Result) {
+    # leftovers still present in the table; when a restart is needed to finish, a question
+    Show-WTResidues $Result
+    $restart = @($Result | Where-Object { $_ -and $_.PSObject.Properties['RestartReason'] })
+    if (-not $restart.Count) { return }
+    $why = @($restart | ForEach-Object { $_.RestartReason } | Select-Object -Unique)
+    $msg = (T "A restart is needed to complete the removal:`n`n") + (($why | ForEach-Object { "• $_" }) -join "`n") +
+        (T "`n`nRestart now? The computer restarts in 60 seconds; save your work first.")
+    if (-not (Show-WTConfirm $msg 'Restart required')) {
+        Write-WTLog 'Restart postponed: the removal is completed at the next restart.' -Level Warn
+        return
+    }
+    & "$env:windir\System32\shutdown.exe" /r /t 60 /c (T 'Restart to complete the removal of programs (WinTech Toolkit).') 2>&1 | Out-Null
+    Write-WTLog 'The computer restarts in 60 seconds (shutdown /a cancels it).' -Level Warn
 }
 
 $pageXaml = @"
@@ -89,14 +166,14 @@ $pageXaml = @"
   <Border Grid.Row="2" Style="{StaticResource Card}" Padding="12,12,12,4" Margin="0,0,0,10">
       <Grid>
         <WrapPanel x:Name="ProgToolbar">
-          <TextBox x:Name="TxtProgFilter" Style="{StaticResource SearchBox}" Width="260" Tag="$(TX 'Search by name or publisher (Ctrl+F)')"/>
+          <TextBox x:Name="TxtProgFilter" Style="{StaticResource SearchBox}" Width="260" Tag="$(TX 'Search by name or publisher (Ctrl+F)')"
+                   ToolTip="$(TX "If no installed program matches (e.g. 'Zoom' already uninstalled), its leftovers are searched")"/>
           $(New-Pill -Name 'BtnProgRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')
           $(New-Pill -Name 'BtnProgExport' -Glyph '&#xE74E;' -Text 'Export CSV')
           <CheckBox x:Name="ChkSilent" Style="{StaticResource Switch}" Content="$(TX 'Silent')" IsChecked="True"
                     ToolTip="$(TX 'MSI with /qn; EXE with QuietUninstallString or the Inno Setup / NSIS switch detected automatically.')"/>
           <CheckBox x:Name="ChkRestorePoint" Style="{StaticResource Switch}" Content="$(TX 'Restore point')" IsChecked="True"/>
-          $(New-Pill -Name 'BtnProgUninstall' -Glyph '&#xE74D;' -Text 'Uninstall selected' -Danger)
-          $(New-Pill -Name 'BtnResidueScan' -Glyph '&#xE721;' -Text 'Find leftovers of selected')
+          $(New-Pill -Name 'BtnProgUninstall' -Glyph '&#xE74D;' -Text 'Uninstall selected' -Danger -ToolTip 'Uninstalls the programs and deletes their leftovers')
           <TextBlock x:Name="TxtProgCount" Style="{StaticResource Counter}" Text="$(TX 'Loading...')"/>
         </WrapPanel>
         <WrapPanel x:Name="StoreToolbar" Visibility="Collapsed">
@@ -104,7 +181,7 @@ $pageXaml = @"
           $(New-Pill -Name 'BtnStoreRefresh' -Glyph '&#xE72C;' -Text 'Refresh' -ToolTip 'F5')
           <CheckBox x:Name="ChkStoreDeprovision" Style="{StaticResource Switch}" Content="$(TX 'Also for new users')" IsChecked="True"
                     ToolTip="$(TX 'Removes the app from the Windows image too, so it is not installed again when a new user signs in.')"/>
-          $(New-Pill -Name 'BtnStoreRemove' -Glyph '&#xE74D;' -Text 'Remove selected apps' -Danger -ToolTip 'Removes the apps for all users, then searches their leftover data')
+          $(New-Pill -Name 'BtnStoreRemove' -Glyph '&#xE74D;' -Text 'Remove selected apps' -Danger -ToolTip 'Removes the apps for all users and deletes their leftover data')
           <TextBlock x:Name="TxtStoreCount" Style="{StaticResource Counter}"/>
         </WrapPanel>
       </Grid>
@@ -167,11 +244,7 @@ $pageXaml = @"
       <DockPanel DockPanel.Dock="Top">
         <TextBlock Style="{StaticResource SectionTitle}" Text="$(TX 'Leftovers found')" Margin="0,4,14,6" VerticalAlignment="Top"/>
         <WrapPanel>
-          <TextBox x:Name="TxtResName" Style="{StaticResource SearchBox}" Width="200" Tag="$(TX 'Manual search: name')" ToolTip="$(TX "For programs that are already uninstalled, e.g. 'Zoom'")"/>
-          <TextBox x:Name="TxtResPublisher" Style="{StaticResource SearchBox}" Width="170" Tag="$(TX 'Publisher (optional)')"/>
-          $(New-Pill -Name 'BtnResidueManual' -Glyph '&#xE721;' -Text 'Search')
-          $(New-Pill -Name 'BtnResidueSelectAll' -Glyph '&#xE762;' -Text 'Select all')
-          $(New-Pill -Name 'BtnResidueRemove' -Glyph '&#xE74D;' -Text 'Delete selected leftovers' -Danger)
+          $(New-Pill -Name 'BtnResidueRemove' -Glyph '&#xE74D;' -Text 'Delete selected leftovers' -Danger -ToolTip 'Deletes only the selected rows (Ctrl+A selects all), without uninstalling the program')
           <TextBlock x:Name="TxtResCount" Style="{StaticResource Counter}"/>
         </WrapPanel>
       </DockPanel>
@@ -196,9 +269,11 @@ $pageXaml = @"
 "@
 
 Register-WTPage -Id 'Programs' -Group 'Software' -Title 'Programs and apps' -Glyph '&#xE71D;' -Xaml $pageXaml -SearchBox 'TxtProgFilter' `
-    -Load { Update-WTPrograms } -Refresh { if (Test-WTStoreTab) { Update-WTStoreApps } else { Update-WTPrograms } } -Init {
-    On 'TabProgDesktop' { Set-WTProgramsTab } -EventName 'Checked'
-    On 'TabProgStore' { Set-WTProgramsTab } -EventName 'Checked'
+    -Load { Update-WTPrograms; Update-WTStoreApps } -Refresh { if (Test-WTStoreTab) { Update-WTStoreApps } else { Update-WTPrograms } } -Init {
+    On 'TabProgDesktop' { Set-WTProgramsTab; Clear-WTResiduePreview; Request-WTResidueRefresh } -EventName 'Checked'
+    On 'TabProgStore' { Set-WTProgramsTab; Clear-WTResiduePreview; Request-WTResidueRefresh } -EventName 'Checked'
+    On 'GridPrograms' { Request-WTResidueRefresh } -EventName 'SelectionChanged'
+    On 'GridStore' { Request-WTResidueRefresh } -EventName 'SelectionChanged'
     On 'BtnStoreRefresh' { Update-WTStoreApps }
     On 'TxtStoreFilter' -EventName 'TextChanged' { Update-WTStoreFilter }
     On 'BtnStoreRemove' {
@@ -211,13 +286,14 @@ Register-WTPage -Id 'Programs' -Group 'Software' -Title 'Programs and apps' -Gly
         $msg = (T "Remove the following apps for all users?`n`n") + (Format-WTList $apps { "• $($_.DisplayName) $($_.Version)" })
         if ($skipped.Count) { $msg += T "`n`nNot removed (needed by Windows): {0}" (($skipped | ForEach-Object { $_.DisplayName }) -join ', ') }
         $msg += $(if ($deprov) { T "`n`nThey will not be installed again for new users." } else { T "`n`nThey may be installed again when a new user signs in." })
-        $msg += T "`n`nWhen done, the leftover data is searched: nothing is deleted without a further confirmation."
+        $msg += T "`n`nWhen done, their leftover data is deleted automatically."
         if (-not (Show-WTConfirm $msg 'Remove apps')) { return }
         Start-WTTask 'Removing Store apps' {
             param($Apps, $Deprovision, $Simulate)
-            Remove-WTStoreApp -InputObject $Apps -Deprovision:$Deprovision -Simulate:$Simulate
+            $found = @(Remove-WTStoreApp -InputObject $Apps -Deprovision:$Deprovision -Simulate:$Simulate)
+            foreach ($g in @($found | Group-Object Program)) { Complete-WTResidueCleanup -InputObject $g.Group -Program $g.Name -Simulate:$Simulate }
         } -Parameters @{ Apps = $apps; Deprovision = $deprov; Simulate = Get-WTSimulate } `
-            -OnComplete { param($r) Show-WTResidues $r; Update-WTStoreApps }
+            -OnComplete { param($r) Show-WTRemovalResult $r; Update-WTStoreApps }
     }
     On 'CmStoreCopy' { if ($ui.GridStore.SelectedItem) { Set-WTClipboard $ui.GridStore.SelectedItem.PackageFullName } }
     On 'CmStoreWeb' {
@@ -238,40 +314,24 @@ Register-WTPage -Id 'Programs' -Group 'Software' -Title 'Programs and apps' -Gly
         $sel = @($ui.GridPrograms.SelectedItems)
         if (-not $sel.Count) { Show-WTInfo 'Select one or more programs.'; return }
         $msg = (T "Uninstall the following programs?`n`n") + (Format-WTList $sel { "• $($_.DisplayName) $($_.Version)" }) +
-            (T "`n`nWhen done, leftovers will be searched: nothing is deleted without a further confirmation.")
+            (T "`n`nWhen done, the leftovers are deleted automatically (registry keys are saved to .reg first); files in use are deleted at the next restart.")
         if (-not (Show-WTConfirm $msg 'Uninstall')) { return }
         Start-WTTask 'Uninstalling programs' {
             param($Programs, $Silent, $Simulate, $RestorePoint)
             if ($RestorePoint -and -not $Simulate) { New-WTRestorePoint -Description (T 'Before uninstalling') | Out-Null }
-            foreach ($p in $Programs) {
-                $null = Uninstall-WTProgram -Program $p -Silent:$Silent -Simulate:$Simulate
-                Find-WTProgramResidue -Program $p
-            }
+            foreach ($p in $Programs) { Invoke-WTProgramRemoval -Program $p -Silent:$Silent -Simulate:$Simulate }
         } -Parameters @{ Programs = $sel; Silent = [bool]$ui.ChkSilent.IsChecked; Simulate = Get-WTSimulate; RestorePoint = [bool]$ui.ChkRestorePoint.IsChecked } `
-            -OnComplete { param($r) Show-WTResidues $r; Update-WTPrograms }
+            -OnComplete { param($r) Show-WTRemovalResult $r; Update-WTPrograms }
     }
-    On 'BtnResidueScan' {
-        $sel = @($ui.GridPrograms.SelectedItems)
-        if (-not $sel.Count) { Show-WTInfo 'Select one or more programs.'; return }
-        Start-WTTask 'Searching for leftovers' { param($Programs) foreach ($p in $Programs) { Find-WTProgramResidue -Program $p } } `
-            -Parameters @{ Programs = $sel } -OnComplete { param($r) Show-WTResidues $r }
-    }
-    On 'BtnResidueManual' {
-        $name = $ui.TxtResName.Text.Trim()
-        if ($name.Length -lt 3) { Show-WTInfo 'Enter the program name (at least 3 characters).'; return }
-        $pseudo = [pscustomobject]@{
-            DisplayName = $name; Publisher = $ui.TxtResPublisher.Text.Trim(); Version = ''; InstallLocation = ''
-            UninstallString = ''; QuietUninstallString = ''; ProductCode = $null; RegistryKey = ''; InstallerType = ''
-        }
-        Start-WTTask (T 'Searching for leftovers: {0}' $name) { param($Program) Find-WTProgramResidue -Program $Program -Partial } `
-            -Parameters @{ Program = $pseudo } -OnComplete { param($r) Show-WTResidues $r }
-    }
-    On 'BtnResidueSelectAll' { $ui.GridResidues.SelectAll() }
     On 'BtnResidueRemove' {
         $sel = @($ui.GridResidues.SelectedItems)
-        if (-not $sel.Count) { Show-WTInfo 'No leftovers selected.'; return }
+        if (-not $sel.Count) { Show-WTInfo 'Select the leftovers to delete (Ctrl+A selects all).'; return }
         $msg = (T "Delete {0} leftovers?`n`n" $sel.Count) + (Format-WTList $sel { "• [$($_.TypeText)] $($_.Path)" } 25) +
             (T "`n`nRegistry keys are saved to .reg before deletion; processes running from the folders will be closed.")
+        # leftovers of a program or app that is still installed: deleting them can break it
+        $names = @($sel | ForEach-Object { $_.Program } | Select-Object -Unique)
+        $still = @($names | Where-Object { $n = $_; $script:AllPrograms + $script:AllStoreApps | Where-Object { $_.DisplayName -eq $n } | Select-Object -First 1 })
+        if ($still.Count) { $msg += T "`n`nStill installed: {0}. Deleting its files can stop it from working: to remove it, use Uninstall." ($still -join ', ') }
         if (-not (Show-WTConfirm $msg 'Delete leftovers')) { return }
         Start-WTTask 'Removing leftovers' { param($Items, $Simulate) Remove-WTResidue -InputObject $Items -Simulate:$Simulate } `
             -Parameters @{ Items = $sel; Simulate = Get-WTSimulate } -OnComplete {

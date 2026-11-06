@@ -71,7 +71,7 @@ function New-WTHtmlReport {
     $sections.Add('<h2>Network</h2>' + (ConvertTo-WTHtmlTable $nets 'Name', 'IP', 'Gateway', 'DNS', 'DHCP', 'MAC', 'Speed' 'Adapter', 'IP', 'Gateway', 'DNS', 'DHCP', 'MAC', 'Speed'))
     $sections.Add('<h2>Local administrators</h2>' + (ConvertTo-WTHtmlTable $admins 'Name', 'Class', 'SourceText' 'Account', 'Type', 'Source'))
     $sections.Add('<h2>Startup programs</h2>' + (ConvertTo-WTHtmlTable $startup 'Name', 'Publisher', 'Location', 'EnabledText', 'Command' 'Name', 'Publisher', 'Location', 'Enabled', 'Command'))
-    $sections.Add('<h2>Printers</h2>' + (ConvertTo-WTHtmlTable $printers 'Name', 'Type', 'Driver', 'Port', 'Status' 'Name', 'Type', 'Driver', 'Port', 'Status'))
+    $sections.Add('<h2>Printers</h2>' + (ConvertTo-WTHtmlTable $printers 'Name', 'Type', 'UserText', 'Driver', 'Port', 'StatusText' 'Name', 'Type', 'User', 'Driver', 'Port', 'Status'))
     $sections.Add('<h2>Recent updates</h2>' + (ConvertTo-WTHtmlTable $updates 'TimeText', 'Title', 'Result', 'Code' 'Date', 'Update', 'Result', 'Code'))
     $sections.Add("<h2>Installed programs ($($programs.Count))</h2>" + (ConvertTo-WTHtmlTable $programs 'DisplayName', 'Version', 'Publisher', 'InstallDate', 'Scope' 'Name', 'Version', 'Publisher', 'Installed on', 'Scope'))
     $sections.Add("<h2>Full inventory</h2><pre>$(& $enc $info)</pre>")

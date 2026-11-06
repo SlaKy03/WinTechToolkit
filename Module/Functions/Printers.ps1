@@ -18,7 +18,7 @@ function Import-WTPrintModule {
 }
 
 function Get-WTPrinterFromCim {
-    # Same objects as Get-WTPrinter, read from Win32_Printer when PrintManagement does not load
+    # Same objects as Get-WTPrinterFromSpooler, read from Win32_Printer when PrintManagement does not load
     $jobs = @(Get-CimInstance Win32_PrintJob -ErrorAction SilentlyContinue)
     foreach ($p in Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue | Sort-Object Name) {
         # PrinterStatus: 4 printing, 7 offline (1 = "other" is common on network queues and is
@@ -33,29 +33,20 @@ function Get-WTPrinterFromCim {
         else { 'Normal' }
         $st = @{ Normal = 'Ready'; Offline = 'Offline'; Error = 'Error'; Printing = 'Printing'; PaperOut = 'Out of paper'; PaperJam = 'Paper jam' }[$key]
         [pscustomobject]@{
-            Name       = $p.Name
-            Type       = $(if ($p.Network) { T 'Network connection' } else { T 'Local' })
-            Driver     = $p.DriverName
-            Port       = $p.PortName
-            Shared     = Format-WTBool $p.Shared
-            Status     = $st
-            StatusText = (T $st)
-            Jobs       = @($jobs | Where-Object { "$($_.Name)".StartsWith("$($p.Name),") }).Count
+            Name = $p.Name; IsConnection = [bool]$p.Network; Driver = $p.DriverName; Port = $p.PortName
+            Shared = Format-WTBool $p.Shared; Status = $st; StatusText = (T $st)
+            Jobs = @($jobs | Where-Object { "$($_.Name)".StartsWith("$($p.Name),") }).Count
         }
     }
 }
 
-function Get-WTPrinter {
-    # Status: Ready, Offline, Error... (row colours), StatusText: shown in the table
+function Get-WTPrinterFromSpooler {
+    # Printers seen by the account the toolkit runs as (Get-Printer, or WMI as a fallback)
     if (-not (Import-WTPrintModule)) {
         Write-WTLog 'The PrintManagement module could not be loaded: printers read from WMI.'
         return Get-WTPrinterFromCim
     }
     $status = @{ Normal = 'Ready'; Offline = 'Offline'; Error = 'Error'; PaperOut = 'Out of paper'; PaperJam = 'Paper jam'; Paused = 'Paused'; Busy = 'Busy'; Printing = 'Printing' }
-    $statusText = @{
-        Normal = (T 'Ready'); Offline = (T 'Offline'); Error = (T 'Error'); PaperOut = (T 'Out of paper'); PaperJam = (T 'Paper jam')
-        Paused = (T 'Paused'); Busy = (T 'Busy'); Printing = (T 'Printing')
-    }
     # In the GUI runspaces the Printer type data is not always applied and PrinterStatus comes
     # back as the raw code of the enum (0 = Normal...)
     $codes = @{ 0 = 'Normal'; 1 = 'Paused'; 2 = 'Error'; 4 = 'PaperJam'; 5 = 'PaperOut'; 7 = 'Offline'; 9 = 'Busy'; 10 = 'Printing' }
@@ -64,19 +55,67 @@ function Get-WTPrinter {
         if ($key -match '^\d+$' -and $codes.ContainsKey([int]$key)) { $key = $codes[[int]$key] }
         $st = $status[$key]
         if (-not $st) { $st = $key }
-        $stText = $statusText[$key]
-        if (-not $stText) { $stText = $st }
         [pscustomobject]@{
-            Name       = $p.Name
-            Type       = $(if ($p.Type -eq 'Connection') { T 'Network connection' } else { T 'Local' })
-            Driver     = $p.DriverName
-            Port       = $p.PortName
-            Shared     = Format-WTBool $p.Shared
-            Status     = $st
-            StatusText = $stText
-            Jobs       = @(Get-PrintJob -PrinterName $p.Name -ErrorAction SilentlyContinue).Count
+            Name = $p.Name; IsConnection = "$($p.Type)" -eq 'Connection'; Driver = $p.DriverName; Port = $p.PortName
+            Shared = Format-WTBool $p.Shared; Status = $st; StatusText = (T $st)
+            Jobs = @(Get-PrintJob -PrinterName $p.Name -ErrorAction SilentlyContinue).Count
         }
     }
+}
+
+function Get-WTUserPrinterConnection {
+    <#
+    .SYNOPSIS
+        Network printers (\\server\queue) connected by the users whose registry is loaded
+        (signed-in users), read from HKEY_USERS\<SID>\Printers\Connections.
+    .NOTES
+        A connection belongs to one user: when the toolkit runs with another administrator
+        account, Get-Printer does not list the connections of the signed-in user.
+    #>
+    foreach ($h in Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue) {
+        $sid = $h.PSChildName
+        if ($sid -notmatch '^S-1-(5-21|12-1)-[\d-]+$') { continue }
+        $user = Resolve-WTSidName $sid
+        if (-not $user) { $user = $sid }
+        foreach ($c in Get-ChildItem "Registry::HKEY_USERS\$sid\Printers\Connections" -ErrorAction SilentlyContinue) {
+            # ",,server,queue" (the queue name may contain commas)
+            $parts = $c.PSChildName.Split(',')
+            if ($parts.Count -lt 4 -or -not $parts[2]) { continue }
+            [pscustomobject]@{ Name = '\\{0}\{1}' -f $parts[2], ($parts[3..($parts.Count - 1)] -join ','); UserName = $user; SID = $sid }
+        }
+    }
+}
+
+function Get-WTPrinter {
+    <#
+    .SYNOPSIS
+        Printers of the computer plus the network connections of every signed-in user.
+    .OUTPUTS
+        Status: Ready, Offline, Error... (row colours); StatusText: shown in the table;
+        UserName: owner of a network connection (empty for the printers of the computer).
+    #>
+    $me = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $short = { param($n) $n -replace "^$([regex]::Escape($env:COMPUTERNAME))\\", '' }
+    $list = New-Object Collections.Generic.List[object]
+    $seen = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($p in Get-WTPrinterFromSpooler) {
+        $owner = if ($p.IsConnection) { $me.Name } else { '' }
+        [void]$seen.Add("$($p.Name)|$owner")
+        $list.Add([pscustomobject]@{
+                Name = $p.Name; Type = $(if ($p.IsConnection) { T 'Network connection' } else { T 'Local' })
+                UserName = $owner; UserText = $(if ($owner) { & $short $owner } else { T 'All users' })
+                Driver = $p.Driver; Port = $p.Port; Shared = $p.Shared; Status = $p.Status; StatusText = $p.StatusText; Jobs = $p.Jobs
+            })
+    }
+    foreach ($c in Get-WTUserPrinterConnection) {
+        if (-not $seen.Add("$($c.Name)|$($c.UserName)")) { continue }
+        # status, driver and queue are only visible in the user's session
+        $list.Add([pscustomobject]@{
+                Name = $c.Name; Type = (T 'Network connection'); UserName = $c.UserName; UserText = (& $short $c.UserName)
+                Driver = ''; Port = ''; Shared = ''; Status = 'UserSession'; StatusText = (T 'In the user session'); Jobs = ''
+            })
+    }
+    $list | Sort-Object Name, UserText
 }
 
 function Add-WTNetworkPrinter {
@@ -110,7 +149,22 @@ function Add-WTNetworkPrinter {
 }
 
 function Remove-WTPrinter {
-    param([Parameter(Mandatory)][string[]]$Name, [switch]$Simulate)
+    <#
+    .SYNOPSIS
+        Removes printers. -UserName: network connections of that user, removed in their session
+        (a connection belongs to one user and cannot be removed from another account).
+    #>
+    param([Parameter(Mandatory)][string[]]$Name, [string]$UserName, [switch]$Simulate)
+    if ($UserName -and $UserName -ne [Security.Principal.WindowsIdentity]::GetCurrent().Name) {
+        foreach ($n in $Name) {
+            if ($Simulate) { Write-WTLog (T "[SIMULATION] Would remove printer {0} in {1}'s session" $n $UserName); continue }
+            $q = $n.Replace("'", "''")
+            $out = @(Invoke-WTUserContext -UserName $UserName -Script "Remove-Printer -Name '$q' -ErrorAction Stop; 'WT-REMOVED'")
+            if ($out -contains 'WT-REMOVED') { Write-WTLog (T 'Printer removed: {0}' "$n ($UserName)") -Level OK }
+            else { Write-WTLog (T 'Could not remove {0}: {1}' $n (($out | Where-Object { $_ }) -join ' ')) -Level Error }
+        }
+        return
+    }
     if (-not (Import-WTPrintModule)) { Write-WTLog 'The PrintManagement module could not be loaded: try again.' -Level Error; return }
     foreach ($n in $Name) {
         if ($Simulate) { Write-WTLog (T '[SIMULATION] Would remove printer {0}' $n); continue }
@@ -155,6 +209,18 @@ function Remove-WTUnusedPrinterDriver {
     if (-not (Import-WTPrintModule)) { Write-WTLog 'The PrintManagement module could not be loaded: try again.' -Level Error; return }
     try { $used = @(Get-Printer -ErrorAction Stop | ForEach-Object { $_.DriverName }) }
     catch { Write-WTLog (T 'Could not read the printers: {0}' $_.Exception.Message.Trim()) -Level Error; return }
+    # Network connections of other users are not listed by Get-Printer, but their drivers are
+    # installed on the computer: they are read in each user's session, otherwise nothing is removed
+    $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    foreach ($u in @(Get-WTUserPrinterConnection | Where-Object { $_.SID -ne $me } | Select-Object -ExpandProperty UserName -Unique)) {
+        Write-WTLog (T "Reading the printer drivers used in {0}'s session..." $u)
+        $out = @(Invoke-WTUserContext -UserName $u -Script "Get-Printer -ErrorAction Stop | ForEach-Object { 'WT-DRV:' + `$_.DriverName }; 'WT-DONE'")
+        if ($out -notcontains 'WT-DONE') {
+            Write-WTLog (T "Could not read the printers of {0}: no driver removed, so that their network printers keep working." $u) -Level Error
+            return
+        }
+        $used += @($out | Where-Object { $_ -like 'WT-DRV:*' } | ForEach-Object { $_.Substring(7) })
+    }
     $drivers = @(Get-PrinterDriver -ErrorAction SilentlyContinue | Where-Object {
             $used -notcontains $_.Name -and $_.Manufacturer -ne 'Microsoft' -and $_.Name -notmatch '^Microsoft|Remote Desktop Easy Print'
         })

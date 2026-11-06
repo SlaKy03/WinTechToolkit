@@ -25,14 +25,20 @@ $smoke.Add_Tick({
     $i = $script:SmokeStep
     if ($i -gt 0 -and $i -le $script:Pages.Count) {
         $id = $script:Pages[$i - 1].Id
-        if ($script:StoreShot -eq 1) {
+        if ($id -eq 'Programs' -and -not $script:StoreShot) {
+            # select the first program: its leftovers appear without pressing anything
+            $ui.GridPrograms.SelectedIndex = 0; $script:StoreShot = 0.5; return
+        } elseif ($id -eq 'Programs' -and $script:StoreShot -eq 0.5) {
+            $script:StoreShot = 1; return   # one more tick: the first search takes a few seconds
+        } elseif ($id -eq 'Programs' -and $script:StoreShot -eq 1) {
+            Save-SmokeShot ('{0:00}-{1}.png' -f $i, $id)
+            $ui.TabProgStore.IsChecked = $true; $script:StoreShot = 2; return
+        } elseif ($id -eq 'Programs' -and $script:StoreShot -eq 2) {
             # second tab of Programs and apps
             Save-SmokeShot ('{0:00}b-{1}-store.png' -f $i, $id)
-            $ui.TabProgDesktop.IsChecked = $true
-            $script:StoreShot = 2
+            $ui.TabProgDesktop.IsChecked = $true; $script:StoreShot = 3
         } else {
             Save-SmokeShot ('{0:00}-{1}.png' -f $i, $id)
-            if ($id -eq 'Programs' -and -not $script:StoreShot) { $ui.TabProgStore.IsChecked = $true; $script:StoreShot = 1; return }
         }
     }
     if ($i -ge $script:Pages.Count) {

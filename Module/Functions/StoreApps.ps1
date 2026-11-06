@@ -104,14 +104,23 @@ function Get-WTStoreApp {
 function Find-WTStoreAppResidue {
     <#
     .SYNOPSIS
-        Leftovers of a removed Store app: the data folders %LOCALAPPDATA%\Packages\<family name>
-        of every profile. Deletes nothing: returns a list for Remove-WTResidue.
+        Leftovers of a removed Store app, for every profile: the data folder
+        %LOCALAPPDATA%\Packages\<family name> and, for the signed-in users (registry loaded),
+        the keys in their UsrClass hive: settings (AppModel\SystemAppData), package registration
+        (AppModel\Repository\Packages) and file associations (AppX... ProgIDs of the app).
+        Deletes nothing: returns a list for Remove-WTResidue.
+    .NOTES
+        The AppxAllUserStore\Deprovisioned keys are never touched: they stop Windows from
+        installing a removed app again.
     #>
-    param([Parameter(Mandatory)]$App)
+    param([Parameter(Mandatory)]$App, [switch]$Preview)
     $pfn = "$($App.PackageFamilyName)"
     if ($pfn -notmatch '^[\w.-]+_[a-z0-9]{13}$') { return }
-    # still installed for some user (removal failed or refused): its data is not a leftover
-    try { if (Get-AppxPackage -AllUsers -ErrorAction Stop | Where-Object { $_.PackageFamilyName -eq $pfn }) { return } } catch { return }
+    # -Preview (app selected in the list): the data that goes away together with the app.
+    # Otherwise, if still installed for some user (removal failed or refused), it is not a leftover
+    if (-not $Preview) {
+        try { if (Get-AppxPackage -AllUsers -ErrorAction Stop | Where-Object { $_.PackageFamilyName -eq $pfn }) { return } } catch { return }
+    }
     foreach ($pr in Get-WTProfileFolders) {
         $dir = Join-Path $pr "AppData\Local\Packages\$pfn"
         if (-not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
@@ -119,6 +128,31 @@ function Find-WTStoreAppResidue {
         [pscustomobject]@{
             Type = 'Folder'; TypeText = (T 'Folder'); Path = $dir; Program = $App.DisplayName
             Reason = (T 'App data ({0})' (Split-Path $pr -Leaf)); SizeBytes = $size; SizeText = (Format-WTSize $size)
+        }
+    }
+
+    # registry of the signed-in users: HKEY_USERS\<SID>_Classes = their Software\Classes
+    $name = "$($App.Name)"
+    if (-not $name) { $name = $pfn.Substring(0, $pfn.LastIndexOf('_')) }
+    $publisherId = $pfn.Substring($pfn.LastIndexOf('_') + 1)
+    $key = { param($Path, $Reason) [pscustomobject]@{ Type = 'Registry'; TypeText = (T 'Registry'); Path = $Path; Program = $App.DisplayName; Reason = $Reason; SizeBytes = [int64]0; SizeText = '' } }
+    foreach ($h in Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue) {
+        if ($h.PSChildName -notmatch '^(S-1-(5-21|12-1)-[\d-]+)_Classes$') { continue }
+        $sid = $Matches[1]
+        $user = Resolve-WTSidName $sid
+        if (-not $user) { $user = $sid }
+        $user = ($user -split '\\')[-1]
+        $classes = "HKEY_USERS\$($h.PSChildName)"
+        $model = "$classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel"
+        if (Test-Path -LiteralPath "Registry::$model\SystemAppData\$pfn") { & $key "$model\SystemAppData\$pfn" (T 'App settings ({0})' $user) }
+        foreach ($k in Get-ChildItem -LiteralPath "Registry::$model\Repository\Packages" -ErrorAction SilentlyContinue) {
+            # <name>_<version>_<arch>_<resource>_<publisher id>
+            if ($k.PSChildName -like "$($name)_*" -and $k.PSChildName -like "*_$publisherId") { & $key "$model\Repository\Packages\$($k.PSChildName)" (T 'App registration ({0})' $user) }
+        }
+        foreach ($k in Get-ChildItem -LiteralPath "Registry::$classes" -ErrorAction SilentlyContinue) {
+            if ($k.PSChildName -notlike 'AppX*') { continue }
+            $aumid = (Get-ItemProperty -LiteralPath "$($k.PSPath)\Application" -ErrorAction SilentlyContinue).AppUserModelID
+            if ("$aumid" -like "$pfn!*") { & $key "$classes\$($k.PSChildName)" (T 'File association ({0})' $user) }
         }
     }
 }

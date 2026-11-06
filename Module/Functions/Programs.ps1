@@ -238,7 +238,9 @@ function Find-WTProgramResidue {
         first-level folders and registry keys whose name contains the text, e.g. "Zoom"
         finds "ZoomVideoApps". Used only on request because it can match more than needed.
     #>
-    param([Parameter(Mandatory)]$Program, [switch]$Partial)
+    param([Parameter(Mandatory)]$Program, [switch]$Partial, [switch]$Quiet)
+    # -Quiet: preview when a program is selected, nothing written to the activity log
+    if ($Quiet) { function Write-WTLog { } }
     $name = $Program.DisplayName
     Write-WTLog (T 'Searching for leftovers of: {0}' $name)
 
@@ -442,7 +444,16 @@ function Find-WTProgramResidue {
     # --- 5. Services and scheduled tasks ----------------------------------------------
     $dirs = @($found | Where-Object { $_.Type -eq 'Folder' } | ForEach-Object { $_.Path })
     $cmp = [StringComparison]::OrdinalIgnoreCase
-    foreach ($svc in Get-CimInstance Win32_Service -ErrorAction SilentlyContinue) {
+    # the preview (-Quiet, a click in the list) reuses services and tasks read in the last minute:
+    # they are the slowest part; the real removal always reads them again
+    if ($Quiet -and $script:WTResidueCache -and ((Get-Date) - $script:WTResidueCache.Time).TotalSeconds -lt 60) {
+        $services = $script:WTResidueCache.Services; $allTasks = $script:WTResidueCache.Tasks
+    } else {
+        $services = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue)
+        try { $allTasks = @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskPath -notlike '\Microsoft\*' }) } catch { $allTasks = @() }
+        $script:WTResidueCache = @{ Time = Get-Date; Services = $services; Tasks = $allTasks }
+    }
+    foreach ($svc in $services) {
         $pn = "$($svc.PathName)"
         if ($pn -match 'svchost\.exe') { continue }
         $match = $false
@@ -450,8 +461,7 @@ function Find-WTProgramResidue {
         if (-not $match -and ($variants -contains $svc.Name -or $variants -contains $svc.DisplayName) -and $pn.IndexOf($env:windir, $cmp) -lt 0) { $match = $true }
         if ($match) { Add-Residue 'Service' $svc.Name (T "Service '{0}' - {1}" $svc.DisplayName $pn) }
     }
-    try { $tasks = @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskPath -notlike '\Microsoft\*' }) } catch { $tasks = @() }
-    foreach ($t in $tasks) {
+    foreach ($t in $allTasks) {
         $exec = [Environment]::ExpandEnvironmentVariables(((@($t.Actions) | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join ' '))
         $match = $false
         foreach ($d in $dirs) { if ($exec.IndexOf($d + '\', $cmp) -ge 0) { $match = $true; break } }
@@ -475,6 +485,56 @@ function Find-WTProgramResidue {
         if (-not $Partial -and -not $Program.RegistryKey) { Write-WTLog 'Nothing matched the exact name. Try a shorter name, or the publisher name.' }
     }
     $found
+}
+
+function Complete-WTResidueCleanup {
+    <#
+    .SYNOPSIS
+        Deletes the leftovers found after an uninstall. Folders with files in use are scheduled
+        for deletion at the next restart.
+    .OUTPUTS
+        The leftovers still present (to review) and, when a restart is needed to finish, an
+        object with RestartReason.
+    #>
+    param([object[]]$InputObject, [string]$Program, [string[]]$RestartReason, [switch]$Simulate)
+    $items = @($InputObject | Where-Object { $_ -and $_.PSObject.Properties['Reason'] })
+    $reasons = New-Object Collections.Generic.List[string]
+    foreach ($r in $RestartReason) { if ($r) { $reasons.Add($r) } }
+    if ($items.Count) {
+        Write-WTLog (T 'Deleting the {0} leftovers of {1}...' $items.Count $Program)
+        $left = @(Remove-WTResidue -InputObject $items -Simulate:$Simulate)
+        if ($Simulate) {
+            $left
+        } else {
+            foreach ($s in @($items | Where-Object { $_.Type -eq 'Service' })) {
+                if (Get-Service -Name $s.Path -ErrorAction SilentlyContinue) { $reasons.Add((T 'the service {0} is removed at restart' $s.Path)) }
+            }
+            foreach ($r in $left) {
+                if ($r.Type -eq 'Folder' -and (Register-WTDeleteAtReboot -Path $r.Path)) { $reasons.Add((T 'files in use in {0}' $r.Path)); continue }
+                $r
+            }
+        }
+    }
+    if ($reasons.Count -and -not $Simulate) { [pscustomobject]@{ RestartReason = $reasons.ToArray(); Program = $Program } }
+}
+
+function Invoke-WTProgramRemoval {
+    <#
+    .SYNOPSIS
+        Uninstalls a program and deletes its leftovers automatically. The leftovers are deleted
+        only when the uninstall completed: otherwise they would include the files of a program
+        that is still installed, and they are returned to be reviewed.
+    #>
+    param([Parameter(Mandatory)]$Program, [switch]$Silent, [switch]$Simulate)
+    $res = Uninstall-WTProgram -Program $Program -Silent:$Silent -Simulate:$Simulate
+    $found = @(Find-WTProgramResidue -Program $Program)
+    if (-not $res.Success) {
+        if ($found.Count) { Write-WTLog (T 'Uninstall of {0} not completed: the leftovers are not deleted automatically, review them.' $Program.DisplayName) -Level Warn }
+        return $found
+    }
+    $why = @()
+    if ($res.ExitCode -in 3010, 1641) { $why += T 'the uninstaller of {0} asked for it' $Program.DisplayName }
+    Complete-WTResidueCleanup -InputObject $found -Program $Program.DisplayName -RestartReason $why -Simulate:$Simulate
 }
 
 function Remove-WTResidue {

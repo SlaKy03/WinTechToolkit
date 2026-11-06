@@ -12,6 +12,18 @@ function ConvertTo-WTFileTime {
     try { [DateTime]::FromFileTime([int64]$ft) } catch { $null }
 }
 
+function Test-WTSystemProfileName {
+    <#
+    .SYNOPSIS
+        $true for the profiles that Windows creates for itself: defaultuser0 / defaultuser100000
+        (setup and first sign-in), WsiAccount. They are not shown and never deleted.
+    #>
+    param([string]$Name)
+    if (-not $Name) { return $false }
+    $leaf = ($Name -split '\\')[-1]
+    $leaf -match '^(defaultuser\d+|WsiAccount)$'
+}
+
 function New-WTProfileObject {
     param($Type, $UserName, $Sid, $KeyName, $Path, $LastUse, $Loaded, $Status, $SizeBytes, $ProtectReason)
     $days = $null
@@ -61,6 +73,8 @@ function Get-WTUserProfile {
 
         $sid = $keyName -replace '\.bak$', ''
         if ($sid -notmatch '^S-1-(5-21|12-1)-[\d-]+$') { continue }   # real accounts only (local, AD, Azure AD)
+        # accounts Windows uses for itself (defaultuser0...): hidden, deleting them causes problems
+        if ((Test-WTSystemProfileName (Split-Path $path -Leaf)) -or (Test-WTSystemProfileName (Resolve-WTSidName $sid))) { continue }
 
         $isBak = $keyName -like '*.bak'
         $c = $cim[$keyName]
@@ -103,7 +117,7 @@ function Get-WTUserProfile {
     if (Test-Path -LiteralPath $profilesDir) {
         $skip = 'Public', 'Default', 'Default User', 'All Users'
         foreach ($d in Get-ChildItem -LiteralPath $profilesDir -Directory -Force -ErrorAction SilentlyContinue) {
-            if ($skip -contains $d.Name) { continue }
+            if ($skip -contains $d.Name -or (Test-WTSystemProfileName $d.Name)) { continue }
             if ($d.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
             if ($referenced.Contains($d.FullName.TrimEnd('\'))) { continue }
             $size = $null
@@ -155,6 +169,9 @@ function Remove-WTUserProfile {
     foreach ($p in $InputObject) {
         Write-WTLog "--- $($p.TypeText): $($p.UserName) [$($p.Path)]"
         if ($p.Protected) { Write-WTLog (T 'Skipped: {0}' $p.ProtectReason) -Level Warn; $ko++; continue }
+        if ((Test-WTSystemProfileName $p.UserName) -or (Test-WTSystemProfileName (Split-Path "$($p.Path)" -Leaf))) {
+            Write-WTLog (T 'Skipped: {0}' (T 'account used by Windows')) -Level Warn; $ko++; continue
+        }
 
         if ($p.Type -eq 'Orphan folder') {
             if (-not $p.Path.StartsWith($profilesDir + '\', [StringComparison]::OrdinalIgnoreCase)) {

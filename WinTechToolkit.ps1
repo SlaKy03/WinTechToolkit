@@ -375,6 +375,7 @@ $xaml = @"
             <WrapPanel Margin="26,4,20,14">
               $(New-Pill -Name 'BtnAboutProject' -Glyph '&#xE774;' -Text 'Project page' -Primary)
               $(New-Pill -Name 'BtnAboutIssue' -Glyph '&#xED15;' -Text 'Report a problem' -ToolTip 'Opens a new issue on GitHub; attach the copied info')
+              $(New-Pill -Name 'BtnAboutGuide' -Glyph '&#xE897;' -Text 'User guide' -ToolTip 'Every section and button, with the command it runs')
               $(New-Pill -Name 'BtnAboutReleases' -Glyph '&#xE896;' -Text 'Releases')
               $(New-Pill -Name 'BtnAboutCopy' -Glyph '&#xE8C8;' -Text 'Copy info' -ToolTip 'Version, Windows and PowerShell, for a bug report')
             </WrapPanel>
@@ -711,7 +712,7 @@ function Show-WTAbout {
     $ui.TxtAboutUser.Text = T '{0} (administrator)' $identity.Name
     $ui.BtnAboutData.Content = $dataDir
     $ui.BtnAboutLog.Content = Split-Path $global:WTLogFile -Leaf
-    foreach ($b in 'BtnAboutProject', 'BtnAboutIssue', 'BtnAboutReleases') { $ui[$b].IsEnabled = [bool]$script:RepoUrl }
+    foreach ($b in 'BtnAboutProject', 'BtnAboutIssue', 'BtnAboutGuide', 'BtnAboutReleases') { $ui[$b].IsEnabled = [bool]$script:RepoUrl }
     $ui.AboutOverlay.Opacity = 0
     $ui.AboutOverlay.Visibility = 'Visible'
     $ui.AboutOverlay.BeginAnimation([System.Windows.UIElement]::OpacityProperty,
@@ -1174,6 +1175,8 @@ $ui.AboutOverlay.Add_MouseLeftButtonDown({
 On 'BtnAboutProject' { Start-Process $script:RepoUrl }
 On 'BtnAboutIssue' { Set-WTClipboard (Get-WTAboutText); Start-Process "$script:RepoUrl/issues/new/choose" }
 On 'BtnAboutReleases' { Start-Process "$script:RepoUrl/releases" }
+# guide in the interface language (English when there is no translated guide)
+On 'BtnAboutGuide' { Start-Process "$script:RepoUrl/blob/main/docs/$(if ($global:WTLanguage -eq 'it') { 'it' } else { 'en' })/README.md" }
 On 'BtnAboutCopy' { Set-WTClipboard (Get-WTAboutText) }
 On 'BtnAboutData' { Start-Process explorer.exe -ArgumentList "`"$dataDir`"" }
 On 'BtnAboutLog' { if (Test-Path -LiteralPath $global:WTLogFile) { Start-Process notepad.exe -ArgumentList "`"$global:WTLogFile`"" } }

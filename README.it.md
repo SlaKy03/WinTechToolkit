@@ -2,7 +2,7 @@
 
 [English](README.md) · **Italiano**
 
-> **Beta (0.9.2-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
+> **Beta (0.9.3-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
 > **modalità Simulazione** attiva e [segnala i problemi](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Molte azioni modificano il sistema (eliminano profili, disinstallano programmi, modificano
 > il registro). **Usalo a tuo rischio**, vedi [LICENSE](LICENSE).
@@ -16,6 +16,16 @@ disinstallazioni con rimozione dei residui, Windows Update, Office e Teams, cred
 stampanti, rete e dominio, anche su PC remoti.
 
 Usa **Windows PowerShell 5.1**, già presente in Windows: non installa nulla.
+
+📖 **[Guida](docs/it/README.md)**: ogni sezione e ogni pulsante, con il comando eseguito e se
+modifica il sistema.
+
+![Dashboard](docs/images/it/dashboard.png)
+
+| | |
+|---|---|
+| ![Programmi e app](docs/images/it/programs.png) | ![Eventi e registri](docs/images/it/events.png) |
+| ![Profili utente](docs/images/it/profiles.png) | ![Stampanti](docs/images/it/printers.png) |
 
 ## Avvio
 

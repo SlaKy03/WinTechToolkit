@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.9.3-beta
 
+- **User guide** in English and Italian (`docs/`): every section and button, with the command it
+  runs, whether it changes the system and the safety rules. Opened from About > User guide.
+- Screenshots in the README, made with `Build\New-Screenshots.ps1` from made-up data (no real
+  computer, domain, user or program list).
 - Fix: `irm ... | iex` never worked. `start.ps1` had a BOM ("term not recognized") and, once
   that was fixed, it failed the integrity check because GitHub serves the `.sha256` file as
   binary and the hash was read from a byte array. The static checks now fail if `start.ps1`
@@ -37,6 +41,26 @@
   again a few times and the list is read from WMI as a last resort. Removing printers, queues
   and unused drivers stops with an error instead: without the printer list every driver would
   have looked unused.
+- Printers: the network printers connected by the signed-in users are listed too, with a new
+  User column. A network connection belongs to one user: when the toolkit ran with another
+  administrator account only the printers of the computer appeared. They are removed in the
+  owner's session; before removing unused drivers, the drivers used in each user's session are
+  read, otherwise nothing is removed.
+- User profiles: the profiles Windows uses for itself (defaultuser0, defaultuser100000,
+  WsiAccount) are no longer listed or offered as users, and are never deleted.
+- Programs and apps: uninstalling a program or removing a Store app now deletes its leftovers
+  automatically (registry keys saved to .reg first). Only after a completed uninstall: otherwise
+  the leftovers are listed for review. Folders with files in use are deleted at the next restart,
+  and when a restart is needed a message offers to restart.
+- Programs and apps: both lists are loaded at startup; selecting a program or an app shows its
+  leftovers right away. Fewer buttons: "Find leftovers of selected", the manual search boxes,
+  "Search" and "Select all" are gone (Ctrl+A selects all). A program removed without the
+  toolkit is found by typing its name in the search box: when no installed program matches,
+  its leftovers are searched. Deleting leftovers of a program that is still installed warns
+  that it may stop working.
+- Store apps: the leftovers also include the registry keys of the signed-in users (app
+  settings, package registration, file associations), not only the data folders. The keys
+  that stop Windows from installing a removed app again are never touched.
 - Closing the toolkit asks for a confirmation, with an option to delete its data in
   `C:\ProgramData\WinTechToolkit` (logs, reports, registry backups, settings).
 - Interface: buttons, search boxes, switches, filters and counters have the same height and

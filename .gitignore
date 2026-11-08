@@ -1,0 +1,14 @@
+# build output
+dist/
+
+# local folders of editors and tools (the repository only uses .github)
+/.*/
+!/.github/
+
+# notes and transcripts stay local: only the documentation below is published
+*.md
+!/README.md
+!/README.it.md
+!/CHANGELOG.md
+!/docs/**/*.md
+*.md.bak

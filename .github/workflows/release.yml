@@ -1,0 +1,44 @@
+# Builds a release with the scripts zip, the exe and their SHA-256 files for every tag vX.Y.Z
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Checks
+        shell: powershell
+        run: |
+          $out = & .\Build\Test-Toolkit.ps1
+          $out
+          if ($out -match 'Syntax errors: [1-9]|missing BOM|must NOT have a BOM|Missing controls|Undefined functions|Missing translations \(|Different placeholders \(|Untranslated XAML texts:|^Init [A-Za-z]+:') { exit 1 }
+
+      - name: Safety checks
+        shell: powershell
+        run: |
+          $out = & .\Build\Test-Safety.ps1
+          $out | Select-Object -Last 15
+          if ($out -match '^FAIL') { exit 1 }
+
+      - name: Build
+        shell: powershell
+        run: .\Build\Build.ps1
+
+      # The release must NOT be marked as pre-release: /releases/latest (used by the
+      # launcher and start.ps1) ignores pre-releases.
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/WinTechToolkit.zip
+            dist/WinTechToolkit.zip.sha256
+            dist/WinTechToolkit.exe
+            dist/WinTechToolkit.exe.sha256
+          generate_release_notes: true

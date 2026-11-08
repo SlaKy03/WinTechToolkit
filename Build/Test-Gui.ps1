@@ -1,0 +1,75 @@
+﻿# Starts the UI off-screen, visits every section and saves a screenshot of each one.
+param([string]$Theme = 'Dark', [string]$Language = 'en', [string]$OutDir = (Join-Path $env:TEMP 'wtsmoke'))
+$root = Split-Path $PSScriptRoot -Parent
+New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+$main = [IO.File]::ReadAllText((Join-Path $root 'WinTechToolkit.ps1'))
+$main = $main.Replace('if (-not ($isAdmin -and $isSTA -and $isDesktop -and -not $is32on64)) {', 'if ($false) {')
+$main = $main.Replace('Get-WTLanguage $settings.Language', "Get-WTLanguage '$Language'")
+$main = $main.Replace('$PSScriptRoot', "'$root'").Replace('$MyInvocation.MyCommand.Path', "'$root\WinTechToolkit.ps1'")
+$hook = @'
+$window.Left = -6000; $window.Top = 0; $window.ShowInTaskbar = $false
+Set-WTTheme '__THEME__'
+$script:SmokeStep = 0
+$smoke = New-Object System.Windows.Threading.DispatcherTimer
+$smoke.Interval = [TimeSpan]::FromMilliseconds(2500)
+function Save-SmokeShot([string]$FileName) {
+    $window.UpdateLayout()
+    $bmp = New-Object System.Windows.Media.Imaging.RenderTargetBitmap ([int]$window.ActualWidth), ([int]$window.ActualHeight), 96, 96, ([System.Windows.Media.PixelFormats]::Pbgra32)
+    $bmp.Render($window)
+    $enc = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+    $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
+    $fs = [IO.File]::Create((Join-Path '__OUT__' $FileName))
+    $enc.Save($fs); $fs.Close()
+}
+$smoke.Add_Tick({
+    $i = $script:SmokeStep
+    if ($i -gt 0 -and $i -le $script:Pages.Count) {
+        $id = $script:Pages[$i - 1].Id
+        if ($id -eq 'Programs' -and -not $script:StoreShot) {
+            # select the first program: its leftovers appear without pressing anything
+            $ui.GridPrograms.SelectedIndex = 0; $script:StoreShot = 0.5; return
+        } elseif ($id -eq 'Programs' -and $script:StoreShot -eq 0.5) {
+            $script:StoreShot = 1; return   # one more tick: the first search takes a few seconds
+        } elseif ($id -eq 'Programs' -and $script:StoreShot -eq 1) {
+            Save-SmokeShot ('{0:00}-{1}.png' -f $i, $id)
+            $ui.TabProgStore.IsChecked = $true; $script:StoreShot = 2; return
+        } elseif ($id -eq 'Programs' -and $script:StoreShot -eq 2) {
+            # second tab of Programs and apps
+            Save-SmokeShot ('{0:00}b-{1}-store.png' -f $i, $id)
+            $ui.TabProgDesktop.IsChecked = $true; $script:StoreShot = 3
+        } else {
+            Save-SmokeShot ('{0:00}-{1}.png' -f $i, $id)
+        }
+    }
+    if ($i -ge $script:Pages.Count) {
+        if ($script:SmokeStep -eq $script:Pages.Count) {
+            Show-WTAbout
+            $script:SmokeStep++
+            return
+        }
+        if ($script:SmokeStep -eq $script:Pages.Count + 1) {
+            Save-SmokeShot '98-about.png'
+            Hide-WTAbout
+            Set-WTSidebar $false
+            $script:SmokeStep++
+            return
+        }
+        Save-SmokeShot '99-sidebar-collapsed.png'
+        $smoke.Stop()
+        $lines = @($script:LogItems | ForEach-Object { $_.Line })
+        Set-Content -LiteralPath (Join-Path '__OUT__' 'log.txt') -Value $lines -Encoding UTF8
+        $script:CurrentJob = $null
+        $script:NoCloseConfirm = $true
+        $window.Close()
+        return
+    }
+    Select-WTPage $i
+    $script:SmokeStep++
+})
+$smoke.Start()
+'@
+$hook = $hook.Replace('__THEME__', $Theme).Replace('__OUT__', $OutDir)
+$main = $main.Replace('$timer.Start()', "`$timer.Start()`r`n$hook")
+$main = $main.Replace('try { $settings | ConvertTo-Json', 'try { return; $settings | ConvertTo-Json')
+. ([scriptblock]::Create($main))
+"Screenshot in $OutDir"

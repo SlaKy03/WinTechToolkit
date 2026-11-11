@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Checks: `Build\Test-Analyzer.ps1` runs PSScriptAnalyzer with the rules that point to real mistakes
+  and checks that the code stays compatible with Windows PowerShell 5.1; it also runs on GitHub.
+
 ## 0.10.0-beta
 
 First public release.

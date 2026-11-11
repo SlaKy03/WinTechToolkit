@@ -137,7 +137,7 @@ Module\Functions\*.ps1    module functions, split by topic
 Module\Lang\*.psd1        interface translations (English is the source text)
 Build\Build.ps1           creates dist\WinTechToolkit.zip/.exe and their .sha256 files
 Build\Launcher.cs         source of the .exe launcher
-Build\Test-*.ps1          static checks, safety checks of the delete functions, and a UI run with screenshots
+Build\Test-*.ps1          static checks, PSScriptAnalyzer, safety checks of the delete functions, and a UI run with screenshots
 Build\New-Screenshots.ps1 screenshots of docs\images with made-up data (no real PC, user or domain)
 docs\en, docs\it          user guide
 ```
@@ -149,6 +149,11 @@ which must have **no** BOM because it is run with `irm | iex`.
 
 `Build\Test-Safety.ps1` checks that profiles, system paths and personal folders can never be
 deleted; it never deletes anything real outside folders it creates in `%LOCALAPPDATA%`.
+
+`Build\Test-Analyzer.ps1` runs [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
+with the rules that point to real mistakes (`$x -eq $null`, `if ($a = 1)`, misplaced backticks,
+syntax that Windows PowerShell 5.1 does not support...). It needs the module:
+`Install-Module PSScriptAnalyzer -Scope CurrentUser`.
 
 ## Known limitations
 

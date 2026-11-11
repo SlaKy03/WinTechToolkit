@@ -1,5 +1,5 @@
-# Static checks (encoding, syntax, XAML, controls, functions) and the safety checks of the
-# delete functions on every push and pull request
+# Static checks (encoding, syntax, XAML, controls, functions), the safety checks of the
+# delete functions and PSScriptAnalyzer on every push and pull request
 name: Checks
 
 on:
@@ -26,3 +26,12 @@ jobs:
           $out = & .\Build\Test-Safety.ps1
           $out | Select-Object -Last 15
           if ($out -match '^FAIL') { exit 1 }
+
+      - name: Static analysis (PSScriptAnalyzer)
+        shell: powershell
+        run: |
+          if (-not (Get-Module PSScriptAnalyzer -ListAvailable)) { Install-Module PSScriptAnalyzer -Scope CurrentUser -Force }
+          & .\Build\Test-Analyzer.ps1 -SelfTest
+          if ($LASTEXITCODE) { exit 1 }
+          & .\Build\Test-Analyzer.ps1
+          if ($LASTEXITCODE) { exit 1 }

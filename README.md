@@ -165,6 +165,11 @@ syntax that Windows PowerShell 5.1 does not support...). It needs the module:
   open it from File Explorer or use the zip ([details](docs/en/README.md#if-it-does-not-start)).
 - The ticket report is in English only.
 
+## Contributing
+
+Bug reports, ideas, translations and code are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+To report a security problem privately, see [SECURITY.md](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE)

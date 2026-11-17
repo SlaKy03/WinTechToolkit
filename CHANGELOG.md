@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Repository: security policy (`SECURITY.md`) with private vulnerability reports, and a guide
+  for contributors (`CONTRIBUTING.md`).
 - Checks: `Build\Test-Analyzer.ps1` runs PSScriptAnalyzer with the rules that point to real mistakes
   and checks that the code stays compatible with Windows PowerShell 5.1; it also runs on GitHub.
 

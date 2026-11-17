@@ -132,6 +132,11 @@ Elenco completo: `Get-Command -Module WinTechToolkit`.
 
 Per la struttura del progetto vedi il [README in inglese](README.md).
 
+## Contribuire
+
+Segnalazioni, idee, traduzioni e codice sono benvenuti: vedi [CONTRIBUTING.md](CONTRIBUTING.md) (in inglese).
+Per segnalare in privato un problema di sicurezza vedi [SECURITY.md](SECURITY.md).
+
 ## Licenza
 
 [MIT](LICENSE)

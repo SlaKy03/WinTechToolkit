@@ -165,7 +165,17 @@ for ($i = 0; $i -lt $script:Pages.Count; $i++) {
     $key = if ($i -lt 9) { " (Ctrl+$($i + 1))" } else { '' }
     [void]$nav.Append("<RadioButton x:Name=`"Nav_$($p.Id)`" Style=`"{StaticResource NavButton}`" Tag=`"$($p.Glyph)`" Content=`"$(X $p.Title)`" ToolTip=`"$(X $p.Title)$key`"/>")
 }
-$tabs = ($script:Pages | ForEach-Object { "<TabItem>$($_.Xaml)</TabItem>" }) -join ''
+# Pages with tables fill the height of the window; on short screens (laptops at 1366x768)
+# they keep a minimum height and scroll instead of cutting off the controls at the bottom
+$tabs = ($script:Pages | ForEach-Object {
+        $content = $_.Xaml
+        if (-not $content.TrimStart().StartsWith('<ScrollViewer')) {
+            $content = "<ScrollViewer VerticalScrollBarVisibility=`"Auto`" HorizontalScrollBarVisibility=`"Disabled`">" +
+            "<Border MinHeight=`"620`" Height=`"{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}`">" +
+            $content + '</Border></ScrollViewer>'
+        }
+        "<TabItem>$content</TabItem>"
+    }) -join ''
 
 $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"

@@ -85,7 +85,7 @@ h1{margin:0;font-size:26px}h2{font-size:17px;margin:30px 0 10px;color:#8839ef}
 .label{font-size:11px;font-weight:600;color:#6c6f85;text-transform:uppercase}.value{font-size:17px;font-weight:600;margin-top:6px}
 .sub{font-size:12px;color:#6c6f85;margin-top:2px}
 table{border-collapse:collapse;width:100%;background:#fff;border:1px solid #ccd0da;font-size:12.5px}
-th{background:#e6e9ef;text-align:left;padding:6px 8px}td{padding:5px 8px;border-top:1px solid #e6e9ef;vertical-align:top}
+th{background:#e6e9ef;text-align:left;padding:6px 8px}td{padding:5px 8px;border-top:1px solid #e6e9ef;vertical-align:top;overflow-wrap:anywhere}
 pre{background:#fff;border:1px solid #ccd0da;border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px}
 .notes{background:#fff;border-left:4px solid #8839ef;padding:10px 14px}
 '@

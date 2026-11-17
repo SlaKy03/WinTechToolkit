@@ -105,6 +105,15 @@ function Write-WTLog {
         [ValidateSet('Info', 'OK', 'Warn', 'Error')][string]$Level = 'Info'
     )
     $Message = Get-WTText $Message
+    # One entry per line: exception messages often span several lines and repeat themselves
+    if ($Message -match '[\r\n]') {
+        $joined = ''
+        foreach ($p in ($Message -split '\r?\n')) {
+            $p = $p.Trim()
+            if ($p -and $joined.IndexOf($p, [StringComparison]::OrdinalIgnoreCase) -lt 0) { $joined = ($joined + ' ' + $p).Trim() }
+        }
+        $Message = $joined
+    }
     $tag = @{ Info = 'INFO'; OK = 'OK'; Warn = 'WARN'; Error = 'ERROR' }[$Level]
     $line = '{0} [{1,-5}] {2}' -f (Get-Date -Format 'HH:mm:ss'), $tag, $Message
 

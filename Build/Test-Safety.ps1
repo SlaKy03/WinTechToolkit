@@ -254,6 +254,15 @@ $unknownLang = & $mod { Get-WTText 'Cancel' }
 Check 'an unknown language code shows English text' ($unknownLang -eq 'Cancel')
 $global:WTLanguage = 'en'
 
+# --- 10. Log: one entry per line (the activity log colors each line by its tag) ------------------
+$global:WTQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
+& $mod { Write-WTLog "Could not read: Access denied.`r`n`r`nAccess denied." -Level Error }
+& $mod { Write-WTLog 'Single line' }
+$logLines = @($global:WTQueue.ToArray())
+$global:WTQueue = $null
+Check 'a multi-line log message becomes one line without repeats' ($logLines[0] -match '\[ERROR\] Could not read: Access denied\.$' -and $logLines[0] -notmatch '[\r\n]')
+Check 'a single-line log message is unchanged' ($logLines[1] -match '\[INFO \] Single line$')
+
 ''
 "Safety checks: $($script:pass) passed, $($script:fail) failed"
 if ($script:fail) { exit 1 }

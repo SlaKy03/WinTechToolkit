@@ -6,6 +6,10 @@
   for contributors (`CONTRIBUTING.md`).
 - Checks: `Build\Test-Analyzer.ps1` runs PSScriptAnalyzer with the rules that point to real mistakes
   and checks that the code stays compatible with Windows PowerShell 5.1; it also runs on GitHub.
+- Short screens (laptops at 1366x768): the pages with tables scroll instead of cutting off the
+  buttons at the bottom, for example Reset PIN and Windows Hello in Credentials and access.
+- Activity log: an error message that spans several lines is written on one line, without repeats.
+- HTML report: long values, such as printer ports, wrap instead of widening the table.
 
 ## 0.10.0-beta
 

@@ -202,7 +202,7 @@ Describe 'Find-WTProgramResidue' {
     }
 
     It 'finds nothing for a generic or system name, even when everything exists: <DisplayName>' -TestCases @(
-        @{ DisplayName = 'Windows' }, @{ DisplayName = 'Microsoft' }, @{ DisplayName = 'Data' }, @{ DisplayName = 'Users' }, @{ DisplayName = 'abc' }
+        @{ DisplayName = 'Windows' }, @{ DisplayName = 'Microsoft' }, @{ DisplayName = 'Data' }, @{ DisplayName = 'Users' }, @{ DisplayName = 'Common Files' }
     ) {
         Mock Test-Path { $true }
         $found = @(Find-WTProgramResidue -Program (New-FakeProgram -DisplayName $DisplayName -Publisher '' -RegistryKey '') -Partial)
@@ -230,6 +230,12 @@ Describe 'Find-WTProgramResidue' {
             $paths | Should -Not -Contain 'C:\Users\alice\AppData\Roaming\Windows Zoom Helper'
             $paths | Should -Not -Contain 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft Zoom'
             $paths | Should -Not -Contain 'C:\Users\alice\AppData\Roaming\Contoso'
+        }
+
+        It 'skips a name shorter than 4 letters' {
+            $found = @(Find-WTProgramResidue -Program (New-FakeProgram -DisplayName 'Zoo' -Publisher '' -RegistryKey '') -Partial)
+            $found.Count | Should -Be 0
+            Should -Invoke Get-ChildItem -Times 0 -Exactly -ParameterFilter { $Directory }
         }
 
         It 'is off unless asked' {

@@ -202,7 +202,7 @@ Describe 'Find-WTProgramResidue' {
     }
 
     It 'finds nothing for a generic or system name, even when everything exists: <DisplayName>' -TestCases @(
-        @{ DisplayName = 'Windows' }, @{ DisplayName = 'Microsoft' }, @{ DisplayName = 'Data' }, @{ DisplayName = 'Users' }, @{ DisplayName = 'Common Files' }
+        @{ DisplayName = 'Windows' }, @{ DisplayName = 'Microsoft' }, @{ DisplayName = 'Data' }, @{ DisplayName = 'Users' }, @{ DisplayName = 'Tools' }
     ) {
         Mock Test-Path { $true }
         $found = @(Find-WTProgramResidue -Program (New-FakeProgram -DisplayName $DisplayName -Publisher '' -RegistryKey '') -Partial)

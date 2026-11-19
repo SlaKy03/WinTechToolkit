@@ -63,7 +63,7 @@ if ($SelfTest) {
     if ($missing) { exit 1 } else { 'SELFTEST ok'; exit 0 }
 }
 
-$paths = @('Module', 'UI', 'Build', 'WinTechToolkit.ps1', 'start.ps1') | ForEach-Object { Join-Path $root $_ }
+$paths = @('Module', 'UI', 'Build', 'Tests', 'WinTechToolkit.ps1', 'start.ps1') | ForEach-Object { Join-Path $root $_ }
 $found = Invoke-WTAnalyzer $paths
 foreach ($r in $found) {
     'ANALYZER  {0}:{1}  {2}  {3}' -f $r.ScriptPath.Substring($root.Length + 1), $r.Line, $r.RuleName, $r.Message

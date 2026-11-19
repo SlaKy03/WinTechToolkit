@@ -14,3 +14,7 @@ dist/
 !/SECURITY.md
 !/docs/**/*.md
 *.md.bak
+
+# local code-graph tool: output and ignore list stay on this computer
+graphify-out/
+.graphifyignore

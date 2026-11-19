@@ -57,7 +57,7 @@ Describe 'Test-WTProtectedPath' {
     }
 
     It 'protects the folder the toolkit runs from' {
-        $toolkit = InModuleScope { $script:WTToolkitRoot }
+        $toolkit = InModuleScope -ScriptBlock { $script:WTToolkitRoot }
         Test-WTProtectedPath -Path $toolkit -ProfileFolders $profiles | Should -BeTrue
     }
 
@@ -119,7 +119,7 @@ Describe 'Remove-WTFolder' {
         }
 
         It 'refuses the folder the toolkit runs from, its parent and its subfolders' {
-            $toolkit = InModuleScope { $script:WTToolkitRoot }
+            $toolkit = InModuleScope -ScriptBlock { $script:WTToolkitRoot }
             Remove-WTFolder -Path $toolkit | Should -BeFalse
             Remove-WTFolder -Path (Split-Path $toolkit -Parent) | Should -BeFalse
             Remove-WTFolder -Path (Join-Path $toolkit 'Module') | Should -BeFalse

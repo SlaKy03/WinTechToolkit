@@ -59,8 +59,8 @@ Describe 'Name variants' {
     }
 
     It 'Get-WTPublisherVariants never returns Microsoft, Windows or a generic name: <Publisher>' -TestCases @(
-        @{ Publisher = 'Microsoft Corporation' }, @{ Publisher = 'Microsoft' }, @{ Publisher = 'Intel Corporation' },
-        @{ Publisher = 'HP Inc.' }, @{ Publisher = '' }, @{ Publisher = 'AB' }
+        @{ Publisher = 'Microsoft Corporation' }, @{ Publisher = 'Microsoft' }, @{ Publisher = 'Intel Corporation' }, @{ Publisher = 'HP' },
+        @{ Publisher = '' }, @{ Publisher = 'AB' }
     ) {
         @(Get-WTPublisherVariants -Publisher $Publisher).Count | Should -Be 0
     }
@@ -101,7 +101,7 @@ Describe 'Find-WTProgramResidue' {
         Mock Remove-Item { throw 'Find-WTProgramResidue deleted an item' }
         Mock Stop-Service { throw 'Find-WTProgramResidue stopped a service' }
         Mock Unregister-ScheduledTask { throw 'Find-WTProgramResidue deleted a task' }
-        InModuleScope { $script:WTResidueCache = $null }
+        InModuleScope -ScriptBlock { $script:WTResidueCache = $null }
     }
     AfterEach {
         Remove-Variable -Name WTPesterExisting -Scope Global -ErrorAction SilentlyContinue

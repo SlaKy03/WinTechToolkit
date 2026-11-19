@@ -47,11 +47,12 @@ The project layout is described in the [README](README.md#project-layout).
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Build\Test-Toolkit.ps1    # syntax, XAML, controls, translations
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Build\Test-Safety.ps1     # protections of the delete functions
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Build\Test-Pester.ps1     # unit tests of the delete functions (Pester 5)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Build\Test-Analyzer.ps1   # PSScriptAnalyzer (Install-Module PSScriptAnalyzer)
 powershell -NoProfile -ExecutionPolicy Bypass -STA -File .\Build\Test-Gui.ps1   # screenshots of every section in %TEMP%\wtsmoke
 ```
 
-The first three also run on GitHub for every push and pull request. Look at the screenshots when
+The first four also run on GitHub for every push and pull request. Look at the screenshots when
 you change the interface, in both themes (`-Theme Light`) and languages (`-Language it`).
 
 ### Commits

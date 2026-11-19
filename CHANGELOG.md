@@ -9,6 +9,12 @@
 - Short screens (laptops at 1366x768): the pages with tables scroll instead of cutting off the
   buttons at the bottom, for example Reset PIN and Windows Hello in Credentials and access.
 - Activity log: an error message that spans several lines is written on one line, without repeats.
+- Checks: unit tests with Pester 5 (`Build\Test-Pester.ps1`, `Tests\*.Tests.ps1`) for the deletion
+  of folders, user profiles, program leftovers and registry keys, with every destructive call
+  mocked; they also run on GitHub.
+- Deletions: a folder written as `C:\Users\name\Documents\..`, `C:/Windows` or in 8.3 form is
+  checked in its full form, so it can no longer slip past the protections; relative and network
+  paths are refused.
 - HTML report: long values, such as printer ports, wrap instead of widening the table.
 
 ## 0.10.0-beta

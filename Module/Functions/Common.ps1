@@ -336,6 +336,25 @@ function Test-WTProtectedPath {
     $false
 }
 
+function Resolve-WTDeletePath {
+    <#
+    .SYNOPSIS
+        Full form of a folder to delete, as the protection checks must see it:
+        C:\Users\name\Documents\.. is C:\Users\name, C:/Windows is C:\Windows and
+        C:\Users\ABCDEF~1 is C:\Users\abcdef.xyz. $null for relative, drive-relative (C:foo),
+        UNC and \\?\ paths: the delete functions only work on local folders.
+    #>
+    param([string]$Path)
+    if ($Path -notmatch '^[A-Za-z]:[\\/]') { return $null }
+    try { $full = [IO.Path]::GetFullPath($Path) }
+    catch {
+        # too long or invalid characters: accepted only when there is nothing to normalize
+        if ($Path -match '/|\\\\|\\\.{1,2}(\\|$)') { return $null }
+        $full = $Path
+    }
+    (ConvertTo-WTLongPath $full).TrimEnd('\')
+}
+
 function Test-WTFolderDeletable {
     <#
     .SYNOPSIS
@@ -344,8 +363,8 @@ function Test-WTFolderDeletable {
         (allowed only with -AllowProfileRoot) and the profiles Windows uses for itself.
     #>
     param([Parameter(Mandatory)][string]$Path, [switch]$AllowProfileRoot)
-    $p = $Path.TrimEnd('\')
-    if ($p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p -or (Test-WTToolkitPath $p)) { return $false }
+    $p = Resolve-WTDeletePath $Path
+    if (-not $p -or $p.Length -le 3 -or (Get-WTCriticalPaths) -contains $p -or (Test-WTToolkitPath $p)) { return $false }
     $profileFolders = @(Get-WTProfileFolders)
     foreach ($pr in $profileFolders) {
         foreach ($sub in '\AppData', '\AppData\Roaming', '\AppData\Local', '\AppData\LocalLow', '\AppData\Local\Programs', '\Desktop', '\Documents', '\Downloads', '\Pictures', '\Music', '\Videos', '\OneDrive') {
@@ -368,6 +387,7 @@ function Register-WTDeleteAtReboot {
     param([Parameter(Mandatory)][string]$Path)
     $p = $Path.TrimEnd('\')
     if (-not (Test-WTFolderDeletable -Path $p)) { Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error; return $false }
+    $p = Resolve-WTDeletePath $p
     if (-not (Test-Path -LiteralPath $p)) { return $true }
     if (-not ('WTNative.MoveFile' -as [type])) {
         Add-Type -Namespace WTNative -Name MoveFile -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool MoveFileEx(string existing, string target, int flags);'
@@ -409,6 +429,7 @@ function Remove-WTFolder {
         Write-WTLog (T 'Protected path, deletion refused: {0}' $p) -Level Error
         return $false
     }
+    $p = Resolve-WTDeletePath $p
     if (-not (Test-Path -LiteralPath $p)) { return $true }
     if ($Simulate) {
         Write-WTLog (T '[SIMULATION] Would delete folder: {0}' $p)

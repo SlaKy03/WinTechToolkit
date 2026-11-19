@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.1-beta
 
 - Repository: security policy (`SECURITY.md`) with private vulnerability reports, and a guide
   for contributors (`CONTRIBUTING.md`).

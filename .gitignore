@@ -10,5 +10,7 @@ dist/
 !/README.md
 !/README.it.md
 !/CHANGELOG.md
+!/CONTRIBUTING.md
+!/SECURITY.md
 !/docs/**/*.md
 *.md.bak

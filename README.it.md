@@ -2,7 +2,7 @@
 
 [English](README.md) · **Italiano**
 
-> **Beta (0.10.0-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
+> **Beta (0.10.1-beta).** Funziona ed è stato provato, ma non è finito: provalo prima con la
 > **modalità Simulazione** attiva e [segnala i problemi](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Molte azioni modificano il sistema (eliminano profili, disinstallano programmi, modificano
 > il registro). **Usalo a tuo rischio**, vedi [LICENSE](LICENSE).
@@ -131,6 +131,11 @@ Elenco completo: `Get-Command -Module WinTechToolkit`.
 - Il report per il ticket è solo in inglese.
 
 Per la struttura del progetto vedi il [README in inglese](README.md).
+
+## Contribuire
+
+Segnalazioni, idee, traduzioni e codice sono benvenuti: vedi [CONTRIBUTING.md](CONTRIBUTING.md) (in inglese).
+Per segnalare in privato un problema di sicurezza vedi [SECURITY.md](SECURITY.md).
 
 ## Licenza
 

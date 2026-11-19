@@ -28,6 +28,15 @@ jobs:
           $out | Select-Object -Last 15
           if ($out -match '^FAIL') { exit 1 }
 
+      - name: Static analysis (PSScriptAnalyzer)
+        shell: powershell
+        run: |
+          if (-not (Get-Module PSScriptAnalyzer -ListAvailable)) { Install-Module PSScriptAnalyzer -Scope CurrentUser -Force }
+          & .\Build\Test-Analyzer.ps1 -SelfTest
+          if ($LASTEXITCODE) { exit 1 }
+          & .\Build\Test-Analyzer.ps1
+          if ($LASTEXITCODE) { exit 1 }
+
       - name: Build
         shell: powershell
         run: .\Build\Build.ps1

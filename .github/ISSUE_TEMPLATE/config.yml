@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/SlaKy03/WinTechToolkit/security/advisories/new
+    about: Report a vulnerability privately, see SECURITY.md
+  - name: User guide
+    url: https://github.com/SlaKy03/WinTechToolkit/blob/main/docs/README.md
+    about: Every section and button, in English and Italian

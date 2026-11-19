@@ -2,7 +2,7 @@
 
 **English** · [Italiano](README.it.md)
 
-> **Beta (0.10.0-beta).** It works and has been tested, but it is not finished: please try it
+> **Beta (0.10.1-beta).** It works and has been tested, but it is not finished: please try it
 > first with **Simulation mode** on, and [report problems](https://github.com/SlaKy03/WinTechToolkit/issues).
 > Many of the actions change the system (delete profiles, uninstall programs, edit the
 > registry). **Use at your own risk**, see [LICENSE](LICENSE).
@@ -137,7 +137,7 @@ Module\Functions\*.ps1    module functions, split by topic
 Module\Lang\*.psd1        interface translations (English is the source text)
 Build\Build.ps1           creates dist\WinTechToolkit.zip/.exe and their .sha256 files
 Build\Launcher.cs         source of the .exe launcher
-Build\Test-*.ps1          static checks, safety checks of the delete functions, and a UI run with screenshots
+Build\Test-*.ps1          static checks, PSScriptAnalyzer, safety checks of the delete functions, and a UI run with screenshots
 Build\New-Screenshots.ps1 screenshots of docs\images with made-up data (no real PC, user or domain)
 docs\en, docs\it          user guide
 ```
@@ -150,6 +150,11 @@ which must have **no** BOM because it is run with `irm | iex`.
 `Build\Test-Safety.ps1` checks that profiles, system paths and personal folders can never be
 deleted; it never deletes anything real outside folders it creates in `%LOCALAPPDATA%`.
 
+`Build\Test-Analyzer.ps1` runs [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
+with the rules that point to real mistakes (`$x -eq $null`, `if ($a = 1)`, misplaced backticks,
+syntax that Windows PowerShell 5.1 does not support...). It needs the module:
+`Install-Module PSScriptAnalyzer -Scope CurrentUser`.
+
 ## Known limitations
 
 - The HKCU hives of users who are not signed in are not scanned for leftovers.
@@ -159,6 +164,11 @@ deleted; it never deletes anything real outside folders it creates in `%LOCALAPP
 - Some security products (e.g. Sophos) block it when opened from the browser's download list:
   open it from File Explorer or use the zip ([details](docs/en/README.md#if-it-does-not-start)).
 - The ticket report is in English only.
+
+## Contributing
+
+Bug reports, ideas, translations and code are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+To report a security problem privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 

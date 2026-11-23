@@ -56,6 +56,34 @@ but not against someone who takes control of the GitHub account, which is why th
 `.exe` is **not code-signed yet**: SmartScreen and some antivirus programs may flag it.
 If in doubt, use the zip and read the scripts first.
 
+#### "Windows protected your PC"
+
+Because the exe has no code signature yet, Windows SmartScreen may block the first start
+with the message **"Windows protected your PC"** and "Unknown publisher". This is expected
+for a new unsigned program and does not mean a virus was found. To start it anyway:
+
+1. Click **More info**.
+2. Check that the file name is `WinTechToolkit.exe`, then click **Run anyway**.
+
+If you prefer not to bypass SmartScreen, verify the file first (below) or run the toolkit
+from the scripts with `Start-WinTechToolkit.cmd`, which needs no exe at all.
+
+#### Verify the download
+
+Every release publishes a `.sha256` file next to the exe and the zip
+(`WinTechToolkit.exe.sha256`, `WinTechToolkit.zip.sha256`). Download it into the same folder
+and compare the hashes in PowerShell:
+
+```powershell
+$file = 'WinTechToolkit.exe'   # or 'WinTechToolkit.zip'
+$expected = ((Get-Content "$file.sha256") -split '\s+')[0]
+$actual = (Get-FileHash $file -Algorithm SHA256).Hash
+if ($actual -eq $expected) { 'OK: hash matches' } else { 'MISMATCH: do not run this file' }
+```
+
+If the hashes do not match, delete the file and download it again from the
+[Releases](https://github.com/SlaKy03/WinTechToolkit/releases/latest) page.
+
 ## Sections
 
 | Group | Section | What it does |

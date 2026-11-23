@@ -55,6 +55,35 @@ pubblicato nella stessa release. Questo protegge da download corrotti o manomess
 chi prendesse il controllo dell'account GitHub; per questo l'`.exe` **non è ancora firmato**:
 SmartScreen e alcuni antivirus possono segnalarlo. Nel dubbio usa lo zip e leggi prima gli script.
 
+#### "Windows ha protetto il PC"
+
+Dato che l'exe non ha ancora una firma digitale, al primo avvio Windows SmartScreen può
+bloccarlo con il messaggio **"Windows ha protetto il PC"** e "Autore sconosciuto". È normale
+per un programma nuovo non firmato e non significa che sia stato trovato un virus. Per
+avviarlo comunque:
+
+1. Fai clic su **Ulteriori informazioni**.
+2. Controlla che il nome del file sia `WinTechToolkit.exe`, poi fai clic su **Esegui comunque**.
+
+Se preferisci non aggirare SmartScreen, verifica prima il file (sotto) oppure avvia il toolkit
+dagli script con `Start-WinTechToolkit.cmd`, che non usa l'exe.
+
+#### Verificare il download
+
+Ogni release pubblica un file `.sha256` accanto all'exe e allo zip
+(`WinTechToolkit.exe.sha256`, `WinTechToolkit.zip.sha256`). Scaricalo nella stessa cartella e
+confronta gli hash in PowerShell:
+
+```powershell
+$file = 'WinTechToolkit.exe'   # oppure 'WinTechToolkit.zip'
+$expected = ((Get-Content "$file.sha256") -split '\s+')[0]
+$actual = (Get-FileHash $file -Algorithm SHA256).Hash
+if ($actual -eq $expected) { 'OK: hash corrispondente' } else { 'NON CORRISPONDE: non eseguire il file' }
+```
+
+Se gli hash non corrispondono, cancella il file e scaricalo di nuovo dalla pagina
+[Releases](https://github.com/SlaKy03/WinTechToolkit/releases/latest).
+
 ## Sezioni
 
 | Gruppo | Sezione | Cosa fa |
